@@ -84,32 +84,33 @@ class DockerClient:
         self, container_id: str, stream: bool = True
     ) -> Iterator[dict[str, Any]]:
         """Get resource usage statistics for a container.
-        
+
         Args:
             container_id: Container ID or name
             stream: If True, stream stats continuously; if False, return single snapshot
-            
+
         Yields:
             Dictionary with stats data
-            
+
         Raises:
             DockmanError: If container not found or stats retrieval fails
         """
         try:
             container = self._client.containers.get(container_id)
-            stats_stream = container.stats(stream=stream, decode=True)
-            
+
             if stream:
+                # Streaming mode - use decode=True
+                stats_stream = container.stats(stream=True, decode=True)
                 yield from stats_stream
             else:
-                # For non-streaming, yield single result
-                yield next(stats_stream)
+                # Non-streaming mode - returns a single dict
+                stats = container.stats(stream=False)
+                if isinstance(stats, dict):
+                    yield stats
         except NotFound as e:
             raise DockmanError(f"Container '{container_id}' not found") from e
         except APIError as e:
             raise DockmanError(f"Failed to get stats for container '{container_id}': {e}") from e
-        except StopIteration:
-            return
 
 
     def list_images(self, filters: dict[str, Any] | None = None) -> list[Image]:

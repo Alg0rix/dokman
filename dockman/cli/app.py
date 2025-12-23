@@ -877,18 +877,20 @@ def show_stats(
                 console.print("[dim]No running containers found.[/dim]")
                 raise typer.Exit(EXIT_SUCCESS)
 
-            formatter.print_stats(stats_list, as_json=(output_format == OutputFormat.json))
+            # Flatten the list of lists
+            all_stats = [stat for batch in stats_list for stat in batch]
+            formatter.print_stats(all_stats, as_json=(output_format == OutputFormat.json))
         else:
             # Streaming mode
             console.print(f"[dim]Streaming stats for '{project}'... (Ctrl+C to stop)[/dim]\n")
-            for stats in rm.get_stats(proj, stream=True):
+            for stats_batch in rm.get_stats(proj, stream=True):
                 if output_format == OutputFormat.json:
-                    formatter.print_json(stats)
+                    formatter.print_json(stats_batch)
                 else:
                     # Clear and redraw for streaming
                     console.clear()
                     console.print(f"[bold cyan]Stats: {project}[/bold cyan]\n")
-                    formatter.print_stats([stats], as_json=False)
+                    formatter.print_stats(stats_batch, as_json=False)
     except DockmanError as e:
         handle_error(e)
     except KeyboardInterrupt:

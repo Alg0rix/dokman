@@ -349,23 +349,24 @@ class ResourceManager:
         self,
         project: Project,
         stream: bool = True,
-    ) -> Iterator[ContainerStats]:
+    ) -> Iterator[list[ContainerStats]]:
         """Get resource usage statistics for project containers.
-        
+
         Args:
             project: Project to get stats for
             stream: If True, continuously stream stats; if False, single snapshot
-            
+
         Yields:
-            ContainerStats objects for each container
+            List of ContainerStats objects for all containers (one list per update)
         """
         # Get containers for this project
         containers = self._docker.list_containers(
             filters={"label": f"com.docker.compose.project={project.name}"}
         )
-        
+
         if not stream:
             # Single snapshot mode - get stats for all containers once
+            stats_list: list[ContainerStats] = []
             for container in containers:
                 try:
                     stats_iter = self._docker.get_container_stats(
@@ -375,25 +376,80 @@ class ResourceManager:
                         container_stats = self._parse_container_stats(
                             container.id, container.name, stats
                         )
-                        yield container_stats
+                        stats_list.append(container_stats)
                         break  # Only one snapshot per container
                 except DockmanError:
                     # Skip containers that can't provide stats
                     continue
+            if stats_list:
+                yield stats_list
         else:
-            # Streaming mode - yield stats continuously
-            # For simplicity, iterate through containers and yield their stats
+            # Streaming mode - collect stats from all containers and yield together
+            import threading
+            import queue
+
+            # Create a queue for each container's stats
+            container_queues: dict[str, queue.Queue] = {}
             for container in containers:
+                container_queues[container.id] = queue.Queue()
+
+            def fetch_stats(container_id: str, q: queue.Queue) -> None:
+                """Fetch stats for a single container and put in queue."""
                 try:
                     for stats in self._docker.get_container_stats(
-                        container.id, stream=True
+                        container_id, stream=True
                     ):
-                        container_stats = self._parse_container_stats(
-                            container.id, container.name, stats
-                        )
-                        yield container_stats
-                except DockmanError:
-                    continue
+                        q.put(stats)
+                except Exception:
+                    q.put(None)  # Signal completion/error
+
+            # Start threads for all containers
+            threads: list[threading.Thread] = []
+            for container in containers:
+                t = threading.Thread(
+                    target=fetch_stats,
+                    args=(container.id, container_queues[container.id]),
+                    daemon=True,
+                )
+                t.start()
+                threads.append(t)
+
+            # Yield batches of stats from all containers
+            try:
+                while True:
+                    batch: list[ContainerStats] = []
+                    all_done = True
+
+                    for container in containers:
+                        q = container_queues[container.id]
+                        try:
+                            # Non-blocking get with timeout to allow checking other queues
+                            stats = q.get(timeout=0.5)
+                            if stats is None:
+                                continue  # Thread finished but keep going
+                            container_stats = self._parse_container_stats(
+                                container.id, container.name, stats
+                            )
+                            batch.append(container_stats)
+                        except queue.Empty:
+                            # No stats yet for this container
+                            all_done = False
+
+                    if batch:
+                        yield batch
+
+                    # Check if all threads are still alive
+                    for t in threads:
+                        if t.is_alive():
+                            all_done = False
+                            break
+
+                    if all_done and not batch:
+                        break
+            finally:
+                # Clean up threads
+                for t in threads:
+                    t.join(timeout=0.1)
 
     def _parse_container_stats(
         self,

@@ -6,6 +6,7 @@
 
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -25,6 +26,8 @@ from dockman.models import (
     ServiceStatus,
     VolumeInfo,
 )
+from dockman.services.project_manager import ProjectManager
+from dockman.storage.registry import ProjectRegistry
 
 
 # Custom strategies for generating valid test data
@@ -440,3 +443,225 @@ def test_compose_result_round_trip(compose_result: ComposeResult):
     assert deserialized.output == compose_result.output
     assert deserialized.error == compose_result.error
     assert deserialized.return_code == compose_result.return_code
+
+
+# -----------------------------------------------------------------------------
+# Property 1: Project health aggregation is consistent
+# -----------------------------------------------------------------------------
+
+@st.composite
+def service_with_status_strategy(draw, status: ServiceStatus | None = None, health: str | None = None):
+    """Generate a Service with a specific status and health."""
+    actual_status = status if status is not None else draw(service_status_strategy())
+    actual_health = health if health is not None else draw(st.none() | st.sampled_from(["healthy", "unhealthy", "starting"]))
+    
+    return Service(
+        name=draw(st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789_-", min_size=1, max_size=50)),
+        container_id=draw(st.none() | st.text(alphabet="abcdef0123456789", min_size=12, max_size=64)),
+        image=draw(st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789_-/:", min_size=1, max_size=100)),
+        status=actual_status,
+        ports=draw(st.lists(port_strategy(), max_size=5)),
+        health=actual_health,
+        uptime=draw(optional_datetime_strategy()),
+    )
+
+
+@st.composite
+def project_with_services_strategy(draw, services: list[Service] | None = None):
+    """Generate a Project with specific services or random services."""
+    actual_services = services if services is not None else draw(st.lists(service_strategy(), max_size=5))
+    
+    return Project(
+        name=draw(st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789_-", min_size=1, max_size=50)),
+        compose_file=draw(path_strategy()),
+        working_dir=draw(path_strategy()),
+        services=actual_services,
+        status=ProjectHealth.UNKNOWN,  # Will be computed
+        created_at=draw(optional_datetime_strategy()),
+    )
+
+
+def create_project_manager() -> ProjectManager:
+    """Create a ProjectManager with mocked dependencies."""
+    registry = MagicMock(spec=ProjectRegistry)
+    docker = MagicMock()
+    compose = MagicMock()
+    return ProjectManager(registry, docker, compose)
+
+
+@given(st.data())
+@settings(max_examples=100)
+def test_project_health_all_running_healthy(data):
+    """
+    **Feature: docker-compose-cli, Property 1: Project health aggregation is consistent**
+    **Validates: Requirements 1.3**
+    
+    *For any* project where all services are running and healthy,
+    the computed project health SHALL be HEALTHY.
+    """
+    pm = create_project_manager()
+    
+    # Generate 1-5 running services with healthy status
+    num_services = data.draw(st.integers(min_value=1, max_value=5))
+    services = []
+    for _ in range(num_services):
+        service = data.draw(service_with_status_strategy(
+            status=ServiceStatus.RUNNING,
+            health="healthy"
+        ))
+        services.append(service)
+    
+    project = data.draw(project_with_services_strategy(services=services))
+    
+    health = pm.get_project_status(project)
+    assert health == ProjectHealth.HEALTHY
+
+
+@given(st.data())
+@settings(max_examples=100)
+def test_project_health_any_unhealthy_service(data):
+    """
+    **Feature: docker-compose-cli, Property 1: Project health aggregation is consistent**
+    **Validates: Requirements 1.3**
+    
+    *For any* project where at least one service has unhealthy health status,
+    the computed project health SHALL be UNHEALTHY.
+    """
+    pm = create_project_manager()
+    
+    # Generate at least one unhealthy service
+    unhealthy_service = data.draw(service_with_status_strategy(
+        status=ServiceStatus.RUNNING,
+        health="unhealthy"
+    ))
+    
+    # Generate 0-4 additional running healthy services
+    num_healthy = data.draw(st.integers(min_value=0, max_value=4))
+    healthy_services = []
+    for _ in range(num_healthy):
+        service = data.draw(service_with_status_strategy(
+            status=ServiceStatus.RUNNING,
+            health="healthy"
+        ))
+        healthy_services.append(service)
+    
+    services = [unhealthy_service] + healthy_services
+    project = data.draw(project_with_services_strategy(services=services))
+    
+    health = pm.get_project_status(project)
+    assert health == ProjectHealth.UNHEALTHY
+
+
+@given(st.data())
+@settings(max_examples=100)
+def test_project_health_any_dead_service(data):
+    """
+    **Feature: docker-compose-cli, Property 1: Project health aggregation is consistent**
+    **Validates: Requirements 1.3**
+    
+    *For any* project where at least one service is dead,
+    the computed project health SHALL be UNHEALTHY.
+    """
+    pm = create_project_manager()
+    
+    # Generate at least one dead service
+    dead_service = data.draw(service_with_status_strategy(status=ServiceStatus.DEAD))
+    
+    # Generate 0-4 additional running services
+    num_running = data.draw(st.integers(min_value=0, max_value=4))
+    running_services = []
+    for _ in range(num_running):
+        service = data.draw(service_with_status_strategy(
+            status=ServiceStatus.RUNNING,
+            health="healthy"
+        ))
+        running_services.append(service)
+    
+    services = [dead_service] + running_services
+    project = data.draw(project_with_services_strategy(services=services))
+    
+    health = pm.get_project_status(project)
+    assert health == ProjectHealth.UNHEALTHY
+
+
+@given(st.data())
+@settings(max_examples=100)
+def test_project_health_partial_when_some_stopped(data):
+    """
+    **Feature: docker-compose-cli, Property 1: Project health aggregation is consistent**
+    **Validates: Requirements 1.3**
+    
+    *For any* project where some services are running and some are stopped/exited
+    (but none are dead or unhealthy), the computed project health SHALL be PARTIAL.
+    """
+    pm = create_project_manager()
+    
+    # Generate at least one running service
+    running_service = data.draw(service_with_status_strategy(
+        status=ServiceStatus.RUNNING,
+        health="healthy"
+    ))
+    
+    # Generate at least one stopped/exited service
+    stopped_status = data.draw(st.sampled_from([ServiceStatus.STOPPED, ServiceStatus.EXITED]))
+    stopped_service = data.draw(service_with_status_strategy(status=stopped_status))
+    
+    # Generate 0-3 additional services (running or stopped, not dead)
+    num_additional = data.draw(st.integers(min_value=0, max_value=3))
+    additional_services = []
+    for _ in range(num_additional):
+        status = data.draw(st.sampled_from([
+            ServiceStatus.RUNNING, ServiceStatus.STOPPED, ServiceStatus.EXITED
+        ]))
+        health_val = "healthy" if status == ServiceStatus.RUNNING else None
+        service = data.draw(service_with_status_strategy(status=status, health=health_val))
+        additional_services.append(service)
+    
+    services = [running_service, stopped_service] + additional_services
+    project = data.draw(project_with_services_strategy(services=services))
+    
+    health = pm.get_project_status(project)
+    assert health == ProjectHealth.PARTIAL
+
+
+@given(st.data())
+@settings(max_examples=100)
+def test_project_health_unknown_when_no_services(data):
+    """
+    **Feature: docker-compose-cli, Property 1: Project health aggregation is consistent**
+    **Validates: Requirements 1.3**
+    
+    *For any* project with no services, the computed project health SHALL be UNKNOWN.
+    """
+    pm = create_project_manager()
+    
+    project = data.draw(project_with_services_strategy(services=[]))
+    
+    health = pm.get_project_status(project)
+    assert health == ProjectHealth.UNKNOWN
+
+
+@given(st.data())
+@settings(max_examples=100)
+def test_project_health_all_stopped_is_unhealthy(data):
+    """
+    **Feature: docker-compose-cli, Property 1: Project health aggregation is consistent**
+    **Validates: Requirements 1.3**
+    
+    *For any* project where all services are stopped/exited,
+    the computed project health SHALL be UNHEALTHY.
+    """
+    pm = create_project_manager()
+    
+    # Generate 1-5 stopped/exited services
+    num_services = data.draw(st.integers(min_value=1, max_value=5))
+    services = []
+    for _ in range(num_services):
+        status = data.draw(st.sampled_from([ServiceStatus.STOPPED, ServiceStatus.EXITED]))
+        service = data.draw(service_with_status_strategy(status=status))
+        services.append(service)
+    
+    project = data.draw(project_with_services_strategy(services=services))
+    
+    health = pm.get_project_status(project)
+    assert health == ProjectHealth.UNHEALTHY
