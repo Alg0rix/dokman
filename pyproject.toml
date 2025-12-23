@@ -1,0 +1,26 @@
+[project]
+name = "dockman"
+version = "0.1.0"
+description = "Centralized Docker Compose deployment management CLI"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "typer>=0.20.1",
+    "docker>=7.0.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+dockman = "dockman.cli.app:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "hypothesis>=6.0.0",
+    "pytest-mock>=3.0.0",
+]
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
