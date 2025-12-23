@@ -8,14 +8,14 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from hypothesis import given, settings, assume
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from dockman.clients.compose_client import ComposeClient
 from dockman.clients.docker_client import DockerClient
 from dockman.models.enums import ProjectHealth, ServiceStatus
 from dockman.models.project import Project, Service
-from dockman.models.results import ComposeResult, OperationResult
+from dockman.models.results import ComposeResult
 from dockman.services.service_manager import ServiceManager
 
 
