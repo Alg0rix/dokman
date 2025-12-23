@@ -144,7 +144,10 @@ def list_projects(
 
 @app.command("info")
 def info_project(
-    project: Annotated[str, typer.Argument(help="Project name")],
+    project: Annotated[
+        Optional[str],
+        typer.Argument(help="Project name (optional if in project directory)"),
+    ] = None,
     output_format: Annotated[
         OutputFormat,
         typer.Option("--format", "-f", help="Output format"),
@@ -156,10 +159,21 @@ def info_project(
     """
     try:
         pm = get_project_manager()
-        proj = pm.get_project(project)
+        
+        if project:
+            proj = pm.get_project(project)
+        else:
+            # Auto-detect from current directory
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
 
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_general_ERROR)
 
         # Print project header
         if output_format == OutputFormat.json:
@@ -336,7 +350,10 @@ def up_project(
 
 @app.command("start")
 def start_services(
-    project: Annotated[str, typer.Argument(help="Project name")],
+    project: Annotated[
+        Optional[str],
+        typer.Argument(help="Project name (optional if in project directory)"),
+    ] = None,
     service: Annotated[
         Optional[str],
         typer.Option("--service", "-s", help="Specific service to start"),
@@ -354,9 +371,19 @@ def start_services(
         pm = get_project_manager()
         sm = get_service_manager()
 
-        proj = pm.get_project(project)
+        if project:
+            proj = pm.get_project(project)
+        else:
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_GENERAL_ERROR)
 
         result = sm.start(proj, service)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -369,7 +396,10 @@ def start_services(
 
 @app.command("stop")
 def stop_services(
-    project: Annotated[str, typer.Argument(help="Project name")],
+    project: Annotated[
+        Optional[str],
+        typer.Argument(help="Project name (optional if in project directory)"),
+    ] = None,
     service: Annotated[
         Optional[str],
         typer.Option("--service", "-s", help="Specific service to stop"),
@@ -387,9 +417,19 @@ def stop_services(
         pm = get_project_manager()
         sm = get_service_manager()
 
-        proj = pm.get_project(project)
+        if project:
+            proj = pm.get_project(project)
+        else:
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_GENERAL_ERROR)
 
         result = sm.stop(proj, service)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -402,7 +442,10 @@ def stop_services(
 
 @app.command("restart")
 def restart_services(
-    project: Annotated[str, typer.Argument(help="Project name")],
+    project: Annotated[
+        Optional[str],
+        typer.Argument(help="Project name (optional if in project directory)"),
+    ] = None,
     service: Annotated[
         Optional[str],
         typer.Option("--service", "-s", help="Specific service to restart"),
@@ -421,9 +464,19 @@ def restart_services(
         pm = get_project_manager()
         sm = get_service_manager()
 
-        proj = pm.get_project(project)
+        if project:
+            proj = pm.get_project(project)
+        else:
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_GENERAL_ERROR)
 
         result = sm.restart(proj, service)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -436,7 +489,10 @@ def restart_services(
 
 @app.command("down")
 def down_project(
-    project: Annotated[str, typer.Argument(help="Project name")],
+    project: Annotated[
+        Optional[str],
+        typer.Argument(help="Project name (optional if in project directory)"),
+    ] = None,
     volumes: Annotated[
         bool,
         typer.Option("--volumes", "-v", help="Also remove associated volumes"),
@@ -455,9 +511,19 @@ def down_project(
         pm = get_project_manager()
         sm = get_service_manager()
 
-        proj = pm.get_project(project)
+        if project:
+            proj = pm.get_project(project)
+        else:
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_GENERAL_ERROR)
 
         result = sm.down(proj, remove_volumes=volumes)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -470,7 +536,10 @@ def down_project(
 
 @app.command("redeploy")
 def redeploy_project(
-    project: Annotated[str, typer.Argument(help="Project name")],
+    project: Annotated[
+        Optional[str],
+        typer.Argument(help="Project name (optional if in project directory)"),
+    ] = None,
     no_pull: Annotated[
         bool,
         typer.Option("--no-pull", help="Skip pulling latest images"),
@@ -494,9 +563,19 @@ def redeploy_project(
         pm = get_project_manager()
         sm = get_service_manager()
 
-        proj = pm.get_project(project)
+        if project:
+            proj = pm.get_project(project)
+        else:
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_GENERAL_ERROR)
 
         result = sm.redeploy(proj, pull=not no_pull, strict=strict)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -509,9 +588,12 @@ def redeploy_project(
 
 @app.command("scale")
 def scale_service(
-    project: Annotated[str, typer.Argument(help="Project name")],
     service: Annotated[str, typer.Argument(help="Service name to scale")],
     replicas: Annotated[int, typer.Argument(help="Number of replicas")],
+    project: Annotated[
+        Optional[str],
+        typer.Option("--project", "-p", help="Project name (optional if in project directory)"),
+    ] = None,
     output_format: Annotated[
         OutputFormat,
         typer.Option("--format", "-f", help="Output format"),
@@ -526,9 +608,19 @@ def scale_service(
         pm = get_project_manager()
         sm = get_service_manager()
 
-        proj = pm.get_project(project)
+        if project:
+            proj = pm.get_project(project)
+        else:
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_GENERAL_ERROR)
 
         result = sm.scale(proj, service, replicas)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -546,7 +638,10 @@ def scale_service(
 
 @app.command("logs")
 def show_logs(
-    project: Annotated[str, typer.Argument(help="Project name")],
+    project: Annotated[
+        Optional[str],
+        typer.Argument(help="Project name (optional if in project directory)"),
+    ] = None,
     service: Annotated[
         Optional[str],
         typer.Option("--service", "-s", help="Specific service to show logs for"),
@@ -569,9 +664,19 @@ def show_logs(
         pm = get_project_manager()
         sm = get_service_manager()
 
-        proj = pm.get_project(project)
+        if project:
+            proj = pm.get_project(project)
+        else:
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_GENERAL_ERROR)
 
         for line in sm.logs(proj, service=service, follow=follow, tail=tail):
             console.print(line)
@@ -584,9 +689,12 @@ def show_logs(
 
 @app.command("exec")
 def exec_command(
-    project: Annotated[str, typer.Argument(help="Project name")],
     service: Annotated[str, typer.Argument(help="Service name")],
     command: Annotated[list[str], typer.Argument(help="Command to execute")],
+    project: Annotated[
+        Optional[str],
+        typer.Option("--project", "-p", help="Project name (optional if in project directory)"),
+    ] = None,
     interactive: Annotated[
         bool,
         typer.Option("--interactive", "-i", help="Run in interactive mode with TTY"),
@@ -601,9 +709,19 @@ def exec_command(
         pm = get_project_manager()
         sm = get_service_manager()
 
-        proj = pm.get_project(project)
+        if project:
+            proj = pm.get_project(project)
+        else:
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_GENERAL_ERROR)
 
         exit_code = sm.exec(proj, service, command, interactive=interactive)
         raise typer.Exit(exit_code)
@@ -613,7 +731,10 @@ def exec_command(
 
 @app.command("health")
 def show_health(
-    project: Annotated[str, typer.Argument(help="Project name")],
+    project: Annotated[
+        Optional[str],
+        typer.Argument(help="Project name (optional if in project directory)"),
+    ] = None,
     output_format: Annotated[
         OutputFormat,
         typer.Option("--format", "-f", help="Output format"),
@@ -626,9 +747,19 @@ def show_health(
     try:
         pm = get_project_manager()
 
-        proj = pm.get_project(project)
+        if project:
+            proj = pm.get_project(project)
+        else:
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_GENERAL_ERROR)
 
         if output_format == OutputFormat.json:
             health_data = []
@@ -653,7 +784,10 @@ def show_health(
 
 @app.command("events")
 def stream_events(
-    project: Annotated[str, typer.Argument(help="Project name")],
+    project: Annotated[
+        Optional[str],
+        typer.Argument(help="Project name (optional if in project directory)"),
+    ] = None,
 ) -> None:
     """Stream Docker events for a project in real-time.
 
@@ -664,15 +798,28 @@ def stream_events(
         pm = get_project_manager()
         docker = DockerClient()
 
-        proj = pm.get_project(project)
+        if project:
+            proj = pm.get_project(project)
+        else:
+            proj = pm.get_project_by_path(Path.cwd())
+            if proj:
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+        
         if proj is None:
-            raise ProjectNotFoundError(project)
+            if project:
+                raise ProjectNotFoundError(project)
+            else:
+                console.print("[red]Error:[/red] No project specified and none found in current directory.")
+                raise typer.Exit(EXIT_GENERAL_ERROR)
+        
+        # We need the project name for filtering
+        project_name = proj.name
 
         console.print(f"[dim]Streaming events for project '{project}'... (Ctrl+C to stop)[/dim]\n")
 
         # Filter events by project label
         filters = {
-            "label": f"com.docker.compose.project={project}",
+            "label": f"com.docker.compose.project={project_name}",
         }
 
         for event in docker.events(filters=filters):
@@ -732,6 +879,18 @@ def list_images(
             proj = pm.get_project(project)
             if proj is None:
                 raise ProjectNotFoundError(project)
+        else:
+            # Try to infer, but don't fail if we can't, unless explicit filtering was intended
+            # But the logic here says "optional, lists all if not provided"
+            # So if not provided, we should probably check if we are in a project dir and list only that project?
+            # Or stick to CLI help saying "lists all if not provided"?
+            # The user request says "if I run dokman inside a project folder it should be not needed a project name again"
+            # This implies if I run `dokman images` inside a project folder, I probably want images for THAT project.
+            
+            inferred_proj = pm.get_project_by_path(Path.cwd())
+            if inferred_proj:
+                proj = inferred_proj
+                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
 
         images = rm.list_images(proj)
 

@@ -388,10 +388,8 @@ class ResourceManager:
             import threading
             import queue
 
-            # Create a queue for each container's stats
-            container_queues: dict[str, queue.Queue] = {}
-            for container in containers:
-                container_queues[container.id] = queue.Queue()
+            # Single queue for all stats updates
+            results_queue: queue.Queue = queue.Queue()
 
             def fetch_stats(container_id: str, q: queue.Queue) -> None:
                 """Fetch stats for a single container and put in queue."""
@@ -399,57 +397,82 @@ class ResourceManager:
                     for stats in self._docker.get_container_stats(
                         container_id, stream=True
                     ):
-                        q.put(stats)
+                        q.put((container_id, stats))
                 except Exception:
-                    q.put(None)  # Signal completion/error
+                    pass
+                finally:
+                    q.put((container_id, None))  # Signal completion
 
             # Start threads for all containers
             threads: list[threading.Thread] = []
             for container in containers:
                 t = threading.Thread(
                     target=fetch_stats,
-                    args=(container.id, container_queues[container.id]),
+                    args=(container.id, results_queue),
                     daemon=True,
                 )
                 t.start()
                 threads.append(t)
 
-            # Yield batches of stats from all containers
+            # Cache latest stats for each container
+            latest_stats: dict[str, ContainerStats] = {}
+            active_sources = len(containers)
+
+            # Yield batches of stats
             try:
-                while True:
-                    batch: list[ContainerStats] = []
-                    all_done = True
-
-                    for container in containers:
-                        q = container_queues[container.id]
-                        try:
-                            # Non-blocking get with timeout to allow checking other queues
-                            stats = q.get(timeout=0.5)
-                            if stats is None:
-                                continue  # Thread finished but keep going
-                            container_stats = self._parse_container_stats(
-                                container.id, container.name, stats
+                while active_sources > 0:
+                    try:
+                        # Wait for at least one update with timeout
+                        # Timeout allows checking if threads are still alive
+                        item = results_queue.get(timeout=0.1)
+                        
+                        # Process the first item
+                        container_id, stats = item
+                        if stats is None:
+                            active_sources -= 1
+                        else:
+                            # Update cache (find name from containers list)
+                            container_name = next(
+                                (c.name for c in containers if c.id == container_id), 
+                                container_id[:12]
                             )
-                            batch.append(container_stats)
-                        except queue.Empty:
-                            # No stats yet for this container
-                            all_done = False
+                            latest_stats[container_id] = self._parse_container_stats(
+                                container_id, container_name, stats
+                            )
 
-                    if batch:
-                        yield batch
-
-                    # Check if all threads are still alive
-                    for t in threads:
-                        if t.is_alive():
-                            all_done = False
-                            break
-
-                    if all_done and not batch:
-                        break
+                        # Drain the queue to process all pending updates (batching)
+                        # This prevents flickering and high CPU/redraw usage
+                        while True:
+                            try:
+                                extra_item = results_queue.get_nowait()
+                                c_id, s = extra_item
+                                if s is None:
+                                    active_sources -= 1
+                                else:
+                                    c_name = next(
+                                        (c.name for c in containers if c.id == c_id), 
+                                        c_id[:12]
+                                    )
+                                    latest_stats[c_id] = self._parse_container_stats(
+                                        c_id, c_name, s
+                                    )
+                            except queue.Empty:
+                                break
+                        
+                        # Yield the current view of the world if we have data
+                        if latest_stats:
+                            # Ensure we yield consistent order or handling? 
+                            # List is fine.
+                            yield list(latest_stats.values())
+                            
+                    except queue.Empty:
+                        # No updates in this interval, check threads
+                        # If active_sources > 0, we just loop again
+                        pass
             finally:
-                # Clean up threads
-                for t in threads:
-                    t.join(timeout=0.1)
+                # Clean up threads - they are daemon so they will die, 
+                # but we can try to join them if they are done
+                pass
 
     def _parse_container_stats(
         self,

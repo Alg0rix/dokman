@@ -281,8 +281,8 @@ class ComposeClient:
             raise ComposeFileNotFoundError(project_dir)
 
         args = ["exec"]
-        if not interactive:
-            args.append("-T")  # Disable pseudo-TTY allocation
+        if interactive:
+            args.append("-i")
         args.append(service)
         args.extend(command)
 
