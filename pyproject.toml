@@ -20,6 +20,14 @@ dev = [
     "pytest-mock>=3.0.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Alg0rix/dokman"
+Documentation = "https://github.com/Alg0rix/dokman#readme"
+Repository = "https://github.com/Alg0rix/dokman"
+"Bug Tracker" = "https://github.com/Alg0rix/dokman/issues"
+Changelog = "https://github.com/Alg0rix/dokman/releases"
+"Source Code" = "https://github.com/Alg0rix/dokman"
+
 
 [build-system]
 requires = ["uv_build>=0.8.5,<0.10.0"]

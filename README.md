@@ -15,15 +15,31 @@ Dokman is a Python CLI tool for centralized Docker Compose deployment management
 
 - Python 3.13 or higher
 - Docker Engine with Docker Compose v2
-- uv (recommended) or pip for package management
+- uv (recommended for installation) or pip
 
 ## Installation
 
-### Using uv (Recommended)
+Dokman is published as a Python package on PyPI. We highly recommend installing it with [uv](https://docs.astral.sh/uv/). If you have not installed uv yet, please follow the instructions [here](https://docs.astral.sh/uv/getting-started/installation/) to install it first.
+
+```bash
+# Install using uv (recommended)
+uv tool install --python 3.13 dokman
+
+# Verify installation
+dokman --help
+```
+
+### Using pip
+
+```bash
+pip install dokman
+```
+
+### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/dokman.git
+git clone https://github.com/Alg0rix/dokman.git
 cd dokman
 
 # Install dependencies
@@ -31,24 +47,6 @@ uv sync
 
 # Run dokman
 uv run dokman --help
-```
-
-### Using pip
-
-```bash
-# Clone the repository
-git clone https://github.com/your-org/dokman.git
-cd dokman
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install package
-pip install -e .
-
-# Run dokman
-dokman --help
 ```
 
 ## Quick Start
