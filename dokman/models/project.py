@@ -1,10 +1,10 @@
-"""Project and service data models for Dockman."""
+"""Project and service data models for Dokman."""
 
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from dockman.models.enums import ProjectHealth, ServiceStatus
+from dokman.models.enums import ProjectHealth, ServiceStatus
 
 
 @dataclass

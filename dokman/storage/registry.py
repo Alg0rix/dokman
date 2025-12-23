@@ -3,24 +3,24 @@
 import json
 from pathlib import Path
 
-from dockman.exceptions import RegistryError
-from dockman.models.project import RegisteredProject
+from dokman.exceptions import RegistryError
+from dokman.models.project import RegisteredProject
 
 
 class ProjectRegistry:
     """Manages the local project tracking database.
-    
-    Stores registered projects in a JSON file at ~/.config/dockman/projects.json
+
+    Stores registered projects in a JSON file at ~/.config/dokman/projects.json
     """
 
     def __init__(self, config_path: Path | None = None):
         """Initialize the registry.
-        
+
         Args:
             config_path: Optional custom path for the registry file.
-                        Defaults to ~/.config/dockman/projects.json
+                        Defaults to ~/.config/dokman/projects.json
         """
-        self._config_path = config_path or Path.home() / ".config" / "dockman" / "projects.json"
+        self._config_path = config_path or Path.home() / ".config" / "dokman" / "projects.json"
 
     @property
     def config_path(self) -> Path:

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Dockman is a Python CLI tool for centralized Docker Compose deployment management. It provides a unified interface to manage Docker Compose deployments from any directory without navigating to individual compose file locations.
 
-- **Entry Point:** `dockman.cli.app:app`
+- **Entry Point:** `dokman.cli.app:app`
 - **Python:** >= 3.13
 - **Key Dependencies:** typer (CLI), docker (Docker SDK), rich (output formatting)
 
@@ -35,7 +35,7 @@ uvx ty check
 uv run path/to/file.py
 
 # Run CLI
-dockman --help
+dokman --help
 ```
 
 ## Architecture
@@ -47,10 +47,10 @@ CLI Layer (Typer) → Service Layer → Docker Client Layer → Storage Layer
 ```
 
 **Layer Responsibilities:**
-- **CLI Layer** (`dockman/cli/`): Typer commands with Rich output formatting
-- **Service Layer** (`dockman/services/`): Business logic (ProjectManager, ServiceManager, ResourceManager)
-- **Docker Client Layer** (`dockman/clients/`): Wraps Docker SDK and compose commands
-- **Storage Layer** (`dockman/storage/`): JSON-based project registry at `~/.config/dockman/projects.json`
+- **CLI Layer** (`dokman/cli/`): Typer commands with Rich output formatting
+- **Service Layer** (`dokman/services/`): Business logic (ProjectManager, ServiceManager, ResourceManager)
+- **Docker Client Layer** (`dokman/clients/`): Wraps Docker SDK and compose commands
+- **Storage Layer** (`dokman/storage/`): JSON-based project registry at `~/.config/dokman/projects.json`
 
 ## Key Design Patterns
 
@@ -58,7 +58,7 @@ All data models are dataclasses with `to_dict()` and `from_dict()` methods for s
 
 ## Data Models
 
-All models are in `dockman/models/`:
+All models are in `dokman/models/`:
 - **Enums:** `ServiceStatus` (RUNNING, STOPPED, etc.), `ProjectHealth` (HEALTHY, UNHEALTHY, PARTIAL, UNKNOWN)
 - **Core:** `Service`, `Project`, `RegisteredProject`
 - **Resources:** `ImageInfo`, `VolumeInfo`, `NetworkInfo`, `ContainerStats`
@@ -66,8 +66,8 @@ All models are in `dockman/models/`:
 
 ## Custom Exceptions
 
-Defined in `dockman/exceptions.py`:
-- `DockmanError` (base)
+Defined in `dokman/exceptions.py`:
+- `DokmanError` (base)
 - `ProjectNotFoundError`, `ServiceNotFoundError`, `ServiceNotRunningError`
 - `ComposeFileNotFoundError`, `DockerConnectionError`, `RegistryError`
 

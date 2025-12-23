@@ -1,4 +1,4 @@
-"""Resource data models for Dockman."""
+"""Resource data models for Dokman."""
 
 from dataclasses import dataclass, field
 from datetime import datetime

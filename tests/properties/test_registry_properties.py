@@ -11,8 +11,8 @@ from pathlib import Path
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from dockman.models.project import RegisteredProject
-from dockman.storage.registry import ProjectRegistry
+from dokman.models.project import RegisteredProject
+from dokman.storage.registry import ProjectRegistry
 
 
 # Custom strategies for generating valid test data

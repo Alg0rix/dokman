@@ -1,4 +1,4 @@
-"""Operation result data models for Dockman."""
+"""Operation result data models for Dokman."""
 
 from dataclasses import dataclass, field
 

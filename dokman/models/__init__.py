@@ -1,9 +1,9 @@
-"""Data models for Dockman."""
+"""Data models for Dokman."""
 
-from dockman.models.enums import ProjectHealth, ServiceStatus
-from dockman.models.project import Project, RegisteredProject, Service
-from dockman.models.resources import ContainerStats, ImageInfo, NetworkInfo, VolumeInfo
-from dockman.models.results import BuildResult, ComposeResult, OperationResult, PullResult
+from dokman.models.enums import ProjectHealth, ServiceStatus
+from dokman.models.project import Project, RegisteredProject, Service
+from dokman.models.resources import ContainerStats, ImageInfo, NetworkInfo, VolumeInfo
+from dokman.models.results import BuildResult, ComposeResult, OperationResult, PullResult
 
 __all__ = [
     # Enums

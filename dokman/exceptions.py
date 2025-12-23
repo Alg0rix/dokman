@@ -1,15 +1,15 @@
-"""Custom exceptions for Dockman."""
+"""Custom exceptions for Dokman."""
 
 from pathlib import Path
 
 
-class DockmanError(Exception):
-    """Base exception for Dockman errors."""
+class DokmanError(Exception):
+    """Base exception for Dokman errors."""
 
     pass
 
 
-class ProjectNotFoundError(DockmanError):
+class ProjectNotFoundError(DokmanError):
     """Raised when a project cannot be found."""
 
     def __init__(self, project_name: str):
@@ -17,7 +17,7 @@ class ProjectNotFoundError(DockmanError):
         super().__init__(f"Project '{project_name}' not found")
 
 
-class ServiceNotFoundError(DockmanError):
+class ServiceNotFoundError(DokmanError):
     """Raised when a service cannot be found in a project."""
 
     def __init__(self, project_name: str, service_name: str):
@@ -28,7 +28,7 @@ class ServiceNotFoundError(DockmanError):
         )
 
 
-class ServiceNotRunningError(DockmanError):
+class ServiceNotRunningError(DokmanError):
     """Raised when an operation requires a running service."""
 
     def __init__(self, service_name: str):
@@ -36,7 +36,7 @@ class ServiceNotRunningError(DockmanError):
         super().__init__(f"Service '{service_name}' is not running")
 
 
-class ComposeFileNotFoundError(DockmanError):
+class ComposeFileNotFoundError(DokmanError):
     """Raised when compose file doesn't exist at registered path."""
 
     def __init__(self, path: Path):
@@ -44,13 +44,13 @@ class ComposeFileNotFoundError(DockmanError):
         super().__init__(f"Compose file not found at '{path}'")
 
 
-class DockerConnectionError(DockmanError):
+class DockerConnectionError(DokmanError):
     """Raised when Docker daemon is not accessible."""
 
     pass
 
 
-class RegistryError(DockmanError):
+class RegistryError(DokmanError):
     """Raised for project registry operations failures."""
 
     pass

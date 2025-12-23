@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from dockman.models import (
+from dokman.models import (
     BuildResult,
     ComposeResult,
     ContainerStats,
@@ -26,8 +26,8 @@ from dockman.models import (
     ServiceStatus,
     VolumeInfo,
 )
-from dockman.services.project_manager import ProjectManager
-from dockman.storage.registry import ProjectRegistry
+from dokman.services.project_manager import ProjectManager
+from dokman.storage.registry import ProjectRegistry
 
 
 # Custom strategies for generating valid test data

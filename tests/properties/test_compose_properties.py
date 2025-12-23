@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 from hypothesis import given, settings, assume
 from hypothesis import strategies as st
 
-from dockman.clients.compose_client import ComposeClient
+from dokman.clients.compose_client import ComposeClient
 
 
 # Custom strategies

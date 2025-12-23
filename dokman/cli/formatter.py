@@ -1,4 +1,4 @@
-"""Output formatting utilities for Dockman CLI."""
+"""Output formatting utilities for Dokman CLI."""
 
 import json
 import re
@@ -7,7 +7,7 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
-from dockman.models import (
+from dokman.models import (
     ContainerStats,
     ImageInfo,
     NetworkInfo,

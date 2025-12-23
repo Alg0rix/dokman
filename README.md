@@ -1,6 +1,6 @@
-# Dockman
+# Dokman
 
-Dockman is a Python CLI tool for centralized Docker Compose deployment management. It provides a unified interface to manage Docker Compose deployments from any directory without navigating to individual compose file locations.
+Dokman is a Python CLI tool for centralized Docker Compose deployment management. It provides a unified interface to manage Docker Compose deployments from any directory without navigating to individual compose file locations.
 
 ## Features
 
@@ -23,22 +23,22 @@ Dockman is a Python CLI tool for centralized Docker Compose deployment managemen
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/dockman.git
-cd dockman
+git clone https://github.com/your-org/dokman.git
+cd dokman
 
 # Install dependencies
 uv sync
 
-# Run dockman
-uv run dockman --help
+# Run dokman
+uv run dokman --help
 ```
 
 ### Using pip
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/dockman.git
-cd dockman
+git clone https://github.com/your-org/dokman.git
+cd dokman
 
 # Create virtual environment
 python -m venv .venv
@@ -47,8 +47,8 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # Install package
 pip install -e .
 
-# Run dockman
-dockman --help
+# Run dokman
+dokman --help
 ```
 
 ## Quick Start
@@ -59,10 +59,10 @@ Register an existing Docker Compose project for tracking:
 
 ```bash
 # Register from compose file path
-dockman register /path/to/docker-compose.yml
+dokman register /path/to/docker-compose.yml
 
 # Register with custom name
-dockman register /path/to/project --name myapp
+dokman register /path/to/project --name myapp
 ```
 
 ### Start a Project
@@ -71,73 +71,73 @@ Start a project directly (auto-registers if needed):
 
 ```bash
 # Start from current directory
-dockman up
+dokman up
 
 # Start from specific path
-dockman up -f /path/to/project
+dokman up -f /path/to/project
 
 # Start with custom name
-dockman up -f ./myproject -n myapp
+dokman up -f ./myproject -n myapp
 ```
 
 ### List Projects
 
 ```bash
 # List registered projects
-dockman list
+dokman list
 
 # Include unregistered running projects
-dockman list --all
+dokman list --all
 
 # Output as JSON
-dockman list --format json
+dokman list --format json
 ```
 
 ### Manage Services
 
 ```bash
 # View project details
-dockman info myproject
+dokman info myproject
 
 # Start/stop/restart services
-dockman start myproject
-dockman stop myproject
-dockman restart myproject
+dokman start myproject
+dokman stop myproject
+dokman restart myproject
 
 # Restart specific service
-dockman restart myproject --service web
+dokman restart myproject --service web
 
 # Stop and remove containers
-dockman down myproject
+dokman down myproject
 
 # Remove with volumes
-dockman down myproject --volumes
+dokman down myproject --volumes
 ```
 
 ### View Logs
 
 ```bash
 # View all logs
-dockman logs myproject
+dokman logs myproject
 
 # View specific service logs
-dockman logs myproject --service web
+dokman logs myproject --service web
 
 # Follow logs in real-time
-dockman logs myproject --follow
+dokman logs myproject --follow
 
 # Show last N lines
-dockman logs myproject --tail 100
+dokman logs myproject --tail 100
 ```
 
 ### Execute Commands
 
 ```bash
 # Run command in container
-dockman exec myproject web ls -la
+dokman exec myproject web ls -la
 
 # Interactive shell
-dockman exec myproject web sh --interactive
+dokman exec myproject web sh --interactive
 ```
 
 ## Commands Reference
@@ -235,17 +235,17 @@ dockman exec myproject web sh --interactive
 
 ## Configuration
 
-Dockman stores its project registry at:
+Dokman stores its project registry at:
 
 ```
-~/.config/dockman/projects.json
+~/.config/dokman/projects.json
 ```
 
 This file tracks registered projects and their compose file locations.
 
 ## Architecture
 
-Dockman follows a layered architecture:
+Dokman follows a layered architecture:
 
 ```
 CLI Layer (Typer) -> Service Layer -> Docker Client Layer -> Storage Layer
@@ -291,7 +291,7 @@ uvx ty check
 ### Project Structure
 
 ```
-dockman/
+dokman/
   cli/           # CLI commands and output formatting
   clients/       # Docker SDK and compose command wrappers
   models/        # Data models (Project, Service, etc.)

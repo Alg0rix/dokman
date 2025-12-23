@@ -1,20 +1,20 @@
-"""Resource manager service for Dockman."""
+"""Resource manager service for Dokman."""
 
 from collections.abc import Iterator
 from datetime import datetime
 from typing import Any
 
-from dockman.clients.compose_client import ComposeClient
-from dockman.clients.docker_client import DockerClient
-from dockman.exceptions import DockmanError
-from dockman.models.project import Project
-from dockman.models.resources import (
+from dokman.clients.compose_client import ComposeClient
+from dokman.clients.docker_client import DockerClient
+from dokman.exceptions import DokmanError
+from dokman.models.project import Project
+from dokman.models.resources import (
     ContainerStats,
     ImageInfo,
     NetworkInfo,
     VolumeInfo,
 )
-from dockman.models.results import BuildResult, PullResult
+from dokman.models.results import BuildResult, PullResult
 
 
 class ResourceManager:
@@ -378,7 +378,7 @@ class ResourceManager:
                         )
                         stats_list.append(container_stats)
                         break  # Only one snapshot per container
-                except DockmanError:
+                except DokmanError:
                     # Skip containers that can't provide stats
                     continue
             if stats_list:
@@ -609,7 +609,7 @@ class ResourceManager:
         # First, get compose config to identify services with build context
         try:
             config = self._compose.config(project.working_dir)
-        except DockmanError:
+        except DokmanError:
             config = {}
         
         # Identify services with build context

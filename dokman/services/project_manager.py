@@ -1,22 +1,22 @@
-"""Project manager service for Dockman."""
+"""Project manager service for Dokman."""
 
 from datetime import datetime
 from pathlib import Path
 
-from dockman.clients.compose_client import ComposeClient
-from dockman.clients.docker_client import DockerClient
-from dockman.exceptions import (
+from dokman.clients.compose_client import ComposeClient
+from dokman.clients.docker_client import DockerClient
+from dokman.exceptions import (
     ComposeFileNotFoundError,
-    DockmanError,
+    DokmanError,
 )
-from dockman.models.enums import ProjectHealth, ServiceStatus
-from dockman.models.project import Project, RegisteredProject, Service
-from dockman.storage.registry import ProjectRegistry
+from dokman.models.enums import ProjectHealth, ServiceStatus
+from dokman.models.project import Project, RegisteredProject, Service
+from dokman.storage.registry import ProjectRegistry
 
 
 class ProjectManager:
     """Handles project lifecycle and registry operations.
-    
+
     Provides methods to list, register, unregister, and discover
     Docker Compose projects.
     """
@@ -28,7 +28,7 @@ class ProjectManager:
         compose: ComposeClient,
     ) -> None:
         """Initialize ProjectManager.
-        
+
         Args:
             registry: Project registry for tracking projects
             docker: Docker client for container operations
@@ -40,40 +40,40 @@ class ProjectManager:
 
     def list_projects(self, include_unregistered: bool = False) -> list[Project]:
         """List all tracked projects.
-        
+
         Args:
             include_unregistered: If True, also include running projects
                                  that are not registered
-        
+
         Returns:
             List of Project objects with current status
         """
         projects: list[Project] = []
-        
+
         # Get registered projects
         registered = self._registry.list_all()
         registered_names = {p.name for p in registered}
-        
+
         for reg_project in registered:
             project = self._build_project_from_registered(reg_project)
             if project:
                 projects.append(project)
-        
+
         # Optionally include unregistered running projects
         if include_unregistered:
             discovered = self.discover_projects()
             for project in discovered:
                 if project.name not in registered_names:
                     projects.append(project)
-        
+
         return projects
 
     def get_project(self, name: str) -> Project | None:
         """Get a project by name.
-        
+
         Args:
             name: Project name to look up
-            
+
         Returns:
             Project object if found, None otherwise
         """
@@ -81,28 +81,28 @@ class ProjectManager:
         reg_project = self._registry.get(name)
         if reg_project:
             return self._build_project_from_registered(reg_project)
-        
+
         # Check running but unregistered projects
         discovered = self.discover_projects()
         for project in discovered:
             if project.name == name:
                 return project
-        
+
         return None
 
     def register_project(self, path: Path, name: str | None = None) -> Project:
         """Register a Docker Compose project for tracking.
-        
+
         Args:
             path: Path to compose file or directory containing compose file
             name: Optional custom name for the project
-            
+
         Returns:
             The registered Project
-            
+
         Raises:
             ComposeFileNotFoundError: If compose file doesn't exist
-            DockmanError: If registration fails
+            DokmanError: If registration fails
         """
         compose_file = self._resolve_compose_file(path)
         
@@ -265,7 +265,7 @@ class ProjectManager:
         # Get services from compose ps
         try:
             containers = self._compose.ps(working_dir)
-        except DockmanError:
+        except DokmanError:
             containers = []
         
         services = []

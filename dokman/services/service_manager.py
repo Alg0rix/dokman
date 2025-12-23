@@ -1,16 +1,16 @@
-"""Service manager for Dockman container operations."""
+"""Service manager for Dokman container operations."""
 
 from collections.abc import Iterator
 
-from dockman.clients.compose_client import ComposeClient
-from dockman.clients.docker_client import DockerClient
-from dockman.exceptions import (
+from dokman.clients.compose_client import ComposeClient
+from dokman.clients.docker_client import DockerClient
+from dokman.exceptions import (
     ServiceNotFoundError,
     ServiceNotRunningError,
 )
-from dockman.models.enums import ServiceStatus
-from dockman.models.project import Project
-from dockman.models.results import OperationResult
+from dokman.models.enums import ServiceStatus
+from dokman.models.project import Project
+from dokman.models.results import OperationResult
 
 
 class ServiceManager:

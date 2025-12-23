@@ -9,7 +9,7 @@ import re
 from hypothesis import given, settings, assume
 from hypothesis import strategies as st
 
-from dockman.cli.formatter import OutputFormatter, MASK, SENSITIVE_PATTERNS
+from dokman.cli.formatter import OutputFormatter, MASK, SENSITIVE_PATTERNS
 
 
 # Custom strategies

@@ -1,4 +1,4 @@
-"""Enums for Dockman data models."""
+"""Enums for Dokman data models."""
 
 from enum import Enum
 

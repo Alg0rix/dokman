@@ -1,5 +1,5 @@
 [project]
-name = "dockman"
+name = "dokman"
 version = "0.1.0"
 description = "Centralized Docker Compose deployment management CLI"
 readme = "README.md"
@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-dockman = "dockman.cli.app:app"
+dokman = "dokman.cli.app:app"
 
 [dependency-groups]
 dev = [
@@ -22,5 +22,5 @@ dev = [
 
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.8.5,<0.10.0"]
+build-backend = "uv_build"

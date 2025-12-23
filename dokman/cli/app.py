@@ -1,4 +1,4 @@
-"""Main CLI application for Dockman."""
+"""Main CLI application for Dokman."""
 
 from enum import Enum
 from pathlib import Path
@@ -7,21 +7,21 @@ from typing import Annotated, Optional
 import typer
 from rich.console import Console
 
-from dockman.cli.formatter import OutputFormatter
-from dockman.clients.compose_client import ComposeClient
-from dockman.clients.docker_client import DockerClient
-from dockman.exceptions import (
+from dokman.cli.formatter import OutputFormatter
+from dokman.clients.compose_client import ComposeClient
+from dokman.clients.docker_client import DockerClient
+from dokman.exceptions import (
     ComposeFileNotFoundError,
     DockerConnectionError,
-    DockmanError,
+    DokmanError,
     ProjectNotFoundError,
     ServiceNotFoundError,
     ServiceNotRunningError,
 )
-from dockman.services.project_manager import ProjectManager
-from dockman.services.resource_manager import ResourceManager
-from dockman.services.service_manager import ServiceManager
-from dockman.storage.registry import ProjectRegistry
+from dokman.services.project_manager import ProjectManager
+from dokman.services.resource_manager import ResourceManager
+from dokman.services.service_manager import ServiceManager
+from dokman.storage.registry import ProjectRegistry
 
 # Console for output
 console = Console()
@@ -46,7 +46,7 @@ class OutputFormat(str, Enum):
 
 # Main app
 app = typer.Typer(
-    name="dockman",
+    name="dokman",
     help="Centralized Docker Compose deployment management",
     no_args_is_help=True,
 )
@@ -91,7 +91,7 @@ def handle_error(e: Exception) -> None:
     elif isinstance(e, ComposeFileNotFoundError):
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(EXIT_COMPOSE_FILE_ERROR)
-    elif isinstance(e, DockmanError):
+    elif isinstance(e, DokmanError):
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(EXIT_GENERAL_ERROR)
     else:
@@ -101,7 +101,7 @@ def handle_error(e: Exception) -> None:
 
 @app.callback()
 def main() -> None:
-    """Dockman - Manage Docker Compose deployments from anywhere."""
+    """Dokman - Manage Docker Compose deployments from anywhere."""
     pass
 
 
@@ -138,7 +138,7 @@ def list_projects(
             raise typer.Exit(EXIT_SUCCESS)
 
         formatter.print_projects(projects, as_json=(output_format == OutputFormat.json))
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -175,7 +175,7 @@ def info_project(
                 formatter.print_services(proj.services, proj.name, as_json=False)
             else:
                 console.print("[dim]No services found.[/dim]")
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -195,7 +195,7 @@ def register_project(
 ) -> None:
     """Register a Docker Compose project for tracking.
 
-    Adds the project to Dockman's tracking database so it can be managed
+    Adds the project to Dokman's tracking database so it can be managed
     from any directory.
     """
     try:
@@ -205,7 +205,7 @@ def register_project(
             f"[green]✓[/green] Registered project [cyan]{project.name}[/cyan]"
         )
         console.print(f"  Compose file: [dim]{project.compose_file}[/dim]")
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -216,7 +216,7 @@ def unregister_project(
     """Remove a project from tracking.
 
     This does not affect running containers, only removes the project
-    from Dockman's tracking database.
+    from Dokman's tracking database.
     """
     try:
         pm = get_project_manager()
@@ -228,7 +228,7 @@ def unregister_project(
             )
         else:
             console.print(f"[yellow]Project '{project}' was not registered.[/yellow]")
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -261,9 +261,9 @@ def up_project(
     or run from a directory containing a compose file.
 
     Examples:
-        dockman up                    # Use compose file in current directory
-        dockman up -f ./myproject     # Use compose file in ./myproject
-        dockman up -f docker-compose.yml -n myapp  # Custom project name
+        dokman up                    # Use compose file in current directory
+        dokman up -f ./myproject     # Use compose file in ./myproject
+        dokman up -f docker-compose.yml -n myapp  # Custom project name
     """
     try:
         pm = get_project_manager()
@@ -286,7 +286,7 @@ def up_project(
             console.print(
                 f"[green]✓[/green] Registered project [cyan]{proj.name}[/cyan]"
             )
-        except DockmanError:
+        except DokmanError:
             # Project might already be registered, try to find it
             # Find compose file to determine project name
             if compose_path.is_file():
@@ -325,7 +325,7 @@ def up_project(
             if result.error:
                 console.print(f"[red]Error:[/red] {result.error}")
             raise typer.Exit(EXIT_OPERATION_FAILED)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -363,7 +363,7 @@ def start_services(
 
         if not result.success:
             raise typer.Exit(EXIT_OPERATION_FAILED)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -396,7 +396,7 @@ def stop_services(
 
         if not result.success:
             raise typer.Exit(EXIT_OPERATION_FAILED)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -430,7 +430,7 @@ def restart_services(
 
         if not result.success:
             raise typer.Exit(EXIT_OPERATION_FAILED)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -464,7 +464,7 @@ def down_project(
 
         if not result.success:
             raise typer.Exit(EXIT_OPERATION_FAILED)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -503,7 +503,7 @@ def redeploy_project(
 
         if not result.success:
             raise typer.Exit(EXIT_OPERATION_FAILED)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -535,7 +535,7 @@ def scale_service(
 
         if not result.success:
             raise typer.Exit(EXIT_OPERATION_FAILED)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -575,7 +575,7 @@ def show_logs(
 
         for line in sm.logs(proj, service=service, follow=follow, tail=tail):
             console.print(line)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
     except KeyboardInterrupt:
         # Graceful exit on Ctrl+C when following logs
@@ -607,7 +607,7 @@ def exec_command(
 
         exit_code = sm.exec(proj, service, command, interactive=interactive)
         raise typer.Exit(exit_code)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -647,7 +647,7 @@ def show_health(
                 console.print(
                     f"  {service.name}: [{status_style}]{service.status.value}[/{status_style}] - {health}"
                 )
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -696,7 +696,7 @@ def stream_events(
                 console.print(
                     f"[dim]{timestamp}[/dim] [{event_type}] {action}: {container_name}"
                 )
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
     except KeyboardInterrupt:
         console.print("\n[dim]Event streaming stopped.[/dim]")
@@ -740,7 +740,7 @@ def list_images(
             raise typer.Exit(EXIT_SUCCESS)
 
         formatter.print_images(images, as_json=(output_format == OutputFormat.json))
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -804,7 +804,7 @@ def list_volumes(
                 raise typer.Exit(EXIT_SUCCESS)
 
             formatter.print_volumes(volumes, as_json=(output_format == OutputFormat.json))
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -841,7 +841,7 @@ def list_networks(
             raise typer.Exit(EXIT_SUCCESS)
 
         formatter.print_networks(networks, as_json=(output_format == OutputFormat.json))
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -891,7 +891,7 @@ def show_stats(
                     console.clear()
                     console.print(f"[bold cyan]Stats: {project}[/bold cyan]\n")
                     formatter.print_stats(stats_batch, as_json=False)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
     except KeyboardInterrupt:
         console.print("\n[dim]Stats streaming stopped.[/dim]")
@@ -942,7 +942,7 @@ def pull_images(
                 for image, error in result.failed:
                     console.print(f"  • {image}: {error}")
                 raise typer.Exit(EXIT_OPERATION_FAILED)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -990,7 +990,7 @@ def build_images(
                 for svc, error in result.failed:
                     console.print(f"  • {svc}: {error}")
                 raise typer.Exit(EXIT_OPERATION_FAILED)
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -1024,7 +1024,7 @@ def show_config(
             import json
             console.print(f"\n[bold cyan]Configuration: {project}[/bold cyan]\n")
             console.print(json.dumps(config, indent=2, default=str))
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 
@@ -1099,7 +1099,7 @@ def show_env(
                 as_json=(output_format == OutputFormat.json),
             )
             console.print()  # Add spacing between services
-    except DockmanError as e:
+    except DokmanError as e:
         handle_error(e)
 
 

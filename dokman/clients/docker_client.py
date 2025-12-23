@@ -1,4 +1,4 @@
-"""Docker SDK client wrapper for Dockman."""
+"""Docker SDK client wrapper for Dokman."""
 
 from collections.abc import Iterator
 from typing import Any
@@ -10,14 +10,14 @@ from docker.models.images import Image
 from docker.models.networks import Network
 from docker.models.volumes import Volume
 
-from dockman.exceptions import DockmanError, DockerConnectionError
+from dokman.exceptions import DokmanError, DockerConnectionError
 
 
 class DockerClient:
     """Wrapper around Docker SDK for Python.
-    
+
     Provides a simplified interface to Docker operations and wraps
-    Docker SDK exceptions into DockmanError types.
+    Docker SDK exceptions into DokmanError types.
     """
 
     def __init__(self) -> None:
@@ -41,7 +41,7 @@ class DockerClient:
         try:
             return self._client.containers.list(all=True, filters=filters or {})
         except APIError as e:
-            raise DockmanError(f"Failed to list containers: {e}") from e
+            raise DokmanError(f"Failed to list containers: {e}") from e
 
 
     def get_container(self, container_id: str) -> Container | None:
@@ -58,7 +58,7 @@ class DockerClient:
         except NotFound:
             return None
         except APIError as e:
-            raise DockmanError(f"Failed to get container '{container_id}': {e}") from e
+            raise DokmanError(f"Failed to get container '{container_id}': {e}") from e
 
     def inspect_container(self, container_id: str) -> dict[str, Any]:
         """Get detailed information about a container.
@@ -76,9 +76,9 @@ class DockerClient:
             container = self._client.containers.get(container_id)
             return container.attrs
         except NotFound as e:
-            raise DockmanError(f"Container '{container_id}' not found") from e
+            raise DokmanError(f"Container '{container_id}' not found") from e
         except APIError as e:
-            raise DockmanError(f"Failed to inspect container '{container_id}': {e}") from e
+            raise DokmanError(f"Failed to inspect container '{container_id}': {e}") from e
 
     def get_container_stats(
         self, container_id: str, stream: bool = True
@@ -108,9 +108,9 @@ class DockerClient:
                 if isinstance(stats, dict):
                     yield stats
         except NotFound as e:
-            raise DockmanError(f"Container '{container_id}' not found") from e
+            raise DokmanError(f"Container '{container_id}' not found") from e
         except APIError as e:
-            raise DockmanError(f"Failed to get stats for container '{container_id}': {e}") from e
+            raise DokmanError(f"Failed to get stats for container '{container_id}': {e}") from e
 
 
     def list_images(self, filters: dict[str, Any] | None = None) -> list[Image]:
@@ -125,7 +125,7 @@ class DockerClient:
         try:
             return self._client.images.list(filters=filters or {})
         except APIError as e:
-            raise DockmanError(f"Failed to list images: {e}") from e
+            raise DokmanError(f"Failed to list images: {e}") from e
 
     def list_volumes(self, filters: dict[str, Any] | None = None) -> list[Volume]:
         """List volumes with optional filters.
@@ -140,7 +140,7 @@ class DockerClient:
             result = self._client.volumes.list(filters=filters or {})
             return result
         except APIError as e:
-            raise DockmanError(f"Failed to list volumes: {e}") from e
+            raise DokmanError(f"Failed to list volumes: {e}") from e
 
     def list_networks(self, filters: dict[str, Any] | None = None) -> list[Network]:
         """List networks with optional filters.
@@ -154,7 +154,7 @@ class DockerClient:
         try:
             return self._client.networks.list(filters=filters or {})
         except APIError as e:
-            raise DockmanError(f"Failed to list networks: {e}") from e
+            raise DokmanError(f"Failed to list networks: {e}") from e
 
     def events(self, filters: dict[str, Any] | None = None) -> Iterator[dict[str, Any]]:
         """Stream Docker events.
@@ -169,7 +169,7 @@ class DockerClient:
             for event in self._client.events(filters=filters or {}, decode=True):
                 yield event
         except APIError as e:
-            raise DockmanError(f"Failed to stream events: {e}") from e
+            raise DokmanError(f"Failed to stream events: {e}") from e
 
     def close(self) -> None:
         """Close the Docker client connection."""

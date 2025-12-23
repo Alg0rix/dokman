@@ -11,13 +11,13 @@ from unittest.mock import MagicMock
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from dockman.clients.compose_client import ComposeClient
-from dockman.clients.docker_client import DockerClient
-from dockman.models.enums import ProjectHealth, ServiceStatus
-from dockman.models.project import Project, Service
-from dockman.models.resources import ContainerStats
-from dockman.models.results import BuildResult, ComposeResult, PullResult
-from dockman.services.resource_manager import ResourceManager
+from dokman.clients.compose_client import ComposeClient
+from dokman.clients.docker_client import DockerClient
+from dokman.models.enums import ProjectHealth, ServiceStatus
+from dokman.models.project import Project, Service
+from dokman.models.resources import ContainerStats
+from dokman.models.results import BuildResult, ComposeResult, PullResult
+from dokman.services.resource_manager import ResourceManager
 
 
 # Custom strategies

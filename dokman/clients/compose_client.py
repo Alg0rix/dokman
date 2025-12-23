@@ -1,4 +1,4 @@
-"""Docker Compose CLI client wrapper for Dockman."""
+"""Docker Compose CLI client wrapper for Dokman."""
 
 import json
 import subprocess
@@ -6,8 +6,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from dockman.exceptions import ComposeFileNotFoundError, DockmanError
-from dockman.models.results import ComposeResult
+from dokman.exceptions import ComposeFileNotFoundError, DokmanError
+from dokman.models.results import ComposeResult
 
 
 class ComposeClient:
@@ -59,11 +59,11 @@ class ComposeClient:
                 return_code=result.returncode,
             )
         except subprocess.TimeoutExpired as e:
-            raise DockmanError(f"Command timed out after {timeout}s: {' '.join(cmd)}") from e
+            raise DokmanError(f"Command timed out after {timeout}s: {' '.join(cmd)}") from e
         except FileNotFoundError as e:
-            raise DockmanError("Docker Compose not found. Is Docker installed?") from e
+            raise DokmanError("Docker Compose not found. Is Docker installed?") from e
         except subprocess.SubprocessError as e:
-            raise DockmanError(f"Failed to execute compose command: {e}") from e
+            raise DokmanError(f"Failed to execute compose command: {e}") from e
 
 
     def up(
@@ -254,9 +254,9 @@ class ComposeClient:
                     
             process.wait()
         except FileNotFoundError as e:
-            raise DockmanError("Docker Compose not found. Is Docker installed?") from e
+            raise DokmanError("Docker Compose not found. Is Docker installed?") from e
         except subprocess.SubprocessError as e:
-            raise DockmanError(f"Failed to get logs: {e}") from e
+            raise DokmanError(f"Failed to get logs: {e}") from e
 
 
     def exec(
@@ -295,9 +295,9 @@ class ComposeClient:
             )
             return result.returncode
         except FileNotFoundError as e:
-            raise DockmanError("Docker Compose not found. Is Docker installed?") from e
+            raise DokmanError("Docker Compose not found. Is Docker installed?") from e
         except subprocess.SubprocessError as e:
-            raise DockmanError(f"Failed to execute command: {e}") from e
+            raise DokmanError(f"Failed to execute command: {e}") from e
 
     def config(self, project_dir: Path) -> dict[str, Any]:
         """Get the resolved compose configuration.
@@ -311,12 +311,12 @@ class ComposeClient:
         result = self._run_command(project_dir, ["config", "--format", "json"])
         
         if not result.success:
-            raise DockmanError(f"Failed to get config: {result.error}")
+            raise DokmanError(f"Failed to get config: {result.error}")
         
         try:
             return json.loads(result.output)
         except json.JSONDecodeError as e:
-            raise DockmanError(f"Failed to parse compose config: {e}") from e
+            raise DokmanError(f"Failed to parse compose config: {e}") from e
 
     def ps(self, project_dir: Path) -> list[dict[str, Any]]:
         """List containers for the project.
@@ -330,7 +330,7 @@ class ComposeClient:
         result = self._run_command(project_dir, ["ps", "--format", "json"])
         
         if not result.success:
-            raise DockmanError(f"Failed to list containers: {result.error}")
+            raise DokmanError(f"Failed to list containers: {result.error}")
         
         if not result.output.strip():
             return []
@@ -343,7 +343,7 @@ class ComposeClient:
                     containers.append(json.loads(line))
             return containers
         except json.JSONDecodeError as e:
-            raise DockmanError(f"Failed to parse container list: {e}") from e
+            raise DokmanError(f"Failed to parse container list: {e}") from e
 
     def scale(
         self,
