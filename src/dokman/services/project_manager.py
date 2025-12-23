@@ -90,6 +90,58 @@ class ProjectManager:
 
         return None
 
+    def get_project_by_path(self, path: Path) -> Project | None:
+        """Get a project by its directory path.
+        
+        Args:
+            path: Path to project directory or file within it
+            
+        Returns:
+            Project object if found, None otherwise
+        """
+        # Resolve path
+        path = path.resolve()
+        
+        # If it's a file, get parent directory
+        if path.is_file():
+            path = path.parent
+            
+        # First check registered projects
+        registered = self._registry.list_all()
+        for reg_project in registered:
+            if not reg_project.compose_file.exists():
+                continue
+                
+            project_dir = reg_project.compose_file.parent.resolve()
+            if path == project_dir:
+                return self._build_project_from_registered(reg_project)
+                
+        # Check running but unregistered projects
+        # This is more expensive as it queries Docker
+        discovered = self.discover_projects()
+        for project in discovered:
+            if project.working_dir.resolve() == path:
+                return project
+                
+        # Finally, check if the current directory contains a compose file
+        # and if so, return it as an unregistered project
+        try:
+            compose_file = self._find_compose_file_in_dir(path)
+            if compose_file.exists():
+                # It's a valid project directory, but not registered or running
+                # We can return a basic Project object for it
+                return Project(
+                    name=path.name,
+                    compose_file=compose_file,
+                    working_dir=path,
+                    services=[],
+                    status=ProjectHealth.UNKNOWN,
+                )
+        except Exception:
+            pass
+            
+        return None
+
     def register_project(self, path: Path, name: str | None = None) -> Project:
         """Register a Docker Compose project for tracking.
 
