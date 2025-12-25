@@ -116,6 +116,10 @@ def list_projects(
         bool,
         typer.Option("--all", "-a", help="Include unregistered running projects"),
     ] = False,
+    register: Annotated[
+        bool,
+        typer.Option("--register", "-r", help="Prompt to register discovered unregistered projects"),
+    ] = False,
     output_format: Annotated[
         OutputFormat,
         typer.Option("--format", "-f", help="Output format"),
@@ -124,20 +128,58 @@ def list_projects(
     """List all Docker Compose projects.
 
     Shows registered projects and optionally discovers running unregistered projects.
+    Use --register to be prompted to register any discovered unregistered projects.
     """
     try:
         pm = get_project_manager()
-        projects = pm.list_projects(include_unregistered=all_projects)
+        
+        # If --register is passed, automatically include unregistered projects
+        include_unregistered = all_projects or register
+        projects = pm.list_projects(include_unregistered=include_unregistered)
 
         if not projects:
             console.print("[dim]No projects found.[/dim]")
-            if not all_projects:
+            if not include_unregistered:
                 console.print(
                     "[dim]Tip: Use --all to discover running unregistered projects.[/dim]"
                 )
             raise typer.Exit(EXIT_SUCCESS)
 
         formatter.print_projects(projects, as_json=(output_format == OutputFormat.json))
+        
+        # If --register flag is set, offer to register unregistered projects
+        if register:
+            # Get registered project names
+            registered_names = {p.name for p in pm._registry.list_all()}
+            
+            # Find unregistered projects from the list
+            unregistered = [p for p in projects if p.name not in registered_names]
+            
+            if unregistered:
+                console.print()
+                console.print(f"[yellow]Found {len(unregistered)} unregistered project(s).[/yellow]")
+                
+                for project in unregistered:
+                    if project.working_dir and project.working_dir.exists():
+                        confirm = typer.confirm(
+                            f"Register project '{project.name}' from {project.working_dir}?"
+                        )
+                        if confirm:
+                            try:
+                                registered = pm.register_project(project.working_dir, project.name)
+                                console.print(
+                                    f"[green]✓[/green] Registered project [cyan]{registered.name}[/cyan]"
+                                )
+                            except DokmanError as reg_error:
+                                console.print(
+                                    f"[red]✗[/red] Failed to register '{project.name}': {reg_error}"
+                                )
+                    else:
+                        console.print(
+                            f"[yellow]⚠[/yellow] Cannot register '{project.name}': working directory not found"
+                        )
+            else:
+                console.print("[dim]All discovered projects are already registered.[/dim]")
     except DokmanError as e:
         handle_error(e)
 
