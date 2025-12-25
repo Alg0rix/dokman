@@ -2,11 +2,13 @@
 
 from collections.abc import Iterator
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from dokman.clients.compose_client import ComposeClient
 from dokman.clients.docker_client import DockerClient
 from dokman.exceptions import DokmanError
+from dokman.models.backup import BackupInfo, BackupResult, RestoreResult
 from dokman.models.project import Project
 from dokman.models.resources import (
     ContainerStats,
@@ -682,3 +684,298 @@ class ResourceManager:
             skipped=skipped,
             failed=failed,
         )
+
+    def backup_volumes(
+        self,
+        project: Project,
+        output_dir: Path,
+        service: str | None = None,
+    ) -> BackupResult:
+        """Backup volumes for a project to a tar archive.
+        
+        Creates a tar.gz archive containing all volume data for the project.
+        Uses docker run with alpine to stream volume data.
+        
+        Args:
+            project: Project to backup volumes for
+            output_dir: Directory to save the backup file
+            service: Specific service to backup volumes for (None for all)
+            
+        Returns:
+            BackupResult with backup path and status
+        """
+        import subprocess
+        import tarfile
+        import tempfile
+        from datetime import datetime
+        
+        # Get volumes for this project
+        volumes = self.list_volumes(project)
+        
+        if not volumes:
+            return BackupResult(
+                success=True,
+                backup_path=None,
+                volumes_backed_up=[],
+                volumes_skipped=[],
+                errors=["No volumes found for project"],
+            )
+        
+        # Filter by service if specified
+        if service:
+            volumes = [v for v in volumes if service in v.used_by]
+            if not volumes:
+                return BackupResult(
+                    success=False,
+                    backup_path=None,
+                    volumes_backed_up=[],
+                    volumes_skipped=[],
+                    errors=[f"No volumes found for service '{service}'"],
+                )
+        
+        # Create output directory if needed
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate backup filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"{project.name}_{timestamp}.tar.gz"
+        backup_path = output_dir / backup_filename
+        
+        backed_up: list[str] = []
+        skipped: list[str] = []
+        errors: list[str] = []
+        
+        # Create a temporary directory to collect volume data
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            
+            for volume in volumes:
+                volume_name = volume.name
+                volume_dir = tmpdir_path / volume_name
+                volume_dir.mkdir()
+                
+                try:
+                    # Use docker run to copy volume data to temp dir
+                    # Mount volume as /data and copy to bound tmpdir
+                    cmd = [
+                        "docker", "run", "--rm",
+                        "-v", f"{volume_name}:/source:ro",
+                        "-v", f"{volume_dir}:/backup",
+                        "alpine",
+                        "sh", "-c", "cp -a /source/. /backup/"
+                    ]
+                    
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=300,  # 5 minute timeout per volume
+                    )
+                    
+                    if result.returncode == 0:
+                        backed_up.append(volume_name)
+                    else:
+                        errors.append(f"Failed to backup '{volume_name}': {result.stderr}")
+                        skipped.append(volume_name)
+                        
+                except subprocess.TimeoutExpired:
+                    errors.append(f"Timeout while backing up '{volume_name}'")
+                    skipped.append(volume_name)
+                except Exception as e:
+                    errors.append(f"Error backing up '{volume_name}': {e}")
+                    skipped.append(volume_name)
+            
+            # Create the final tar.gz archive
+            if backed_up:
+                try:
+                    with tarfile.open(backup_path, "w:gz") as tar:
+                        for volume_name in backed_up:
+                            volume_dir = tmpdir_path / volume_name
+                            tar.add(volume_dir, arcname=volume_name)
+                except Exception as e:
+                    return BackupResult(
+                        success=False,
+                        backup_path=None,
+                        volumes_backed_up=[],
+                        volumes_skipped=list(v.name for v in volumes),
+                        errors=[f"Failed to create archive: {e}"],
+                    )
+        
+        return BackupResult(
+            success=len(backed_up) > 0,
+            backup_path=str(backup_path) if backed_up else None,
+            volumes_backed_up=backed_up,
+            volumes_skipped=skipped,
+            errors=errors,
+        )
+
+    def restore_volumes(
+        self,
+        project: Project,
+        backup_path: Path,
+    ) -> RestoreResult:
+        """Restore volumes from a tar archive.
+        
+        Extracts volume data from a backup archive and restores it to
+        the corresponding Docker volumes.
+        
+        Args:
+            project: Project to restore volumes for
+            backup_path: Path to the backup tar.gz file
+            
+        Returns:
+            RestoreResult with restored volumes and status
+        """
+        import subprocess
+        import tarfile
+        import tempfile
+        
+        backup_path = Path(backup_path)
+        
+        if not backup_path.exists():
+            return RestoreResult(
+                success=False,
+                volumes_restored=[],
+                errors=[f"Backup file not found: {backup_path}"],
+            )
+        
+        restored: list[str] = []
+        errors: list[str] = []
+        
+        # Extract to temp directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            
+            try:
+                with tarfile.open(backup_path, "r:gz") as tar:
+                    tar.extractall(tmpdir_path)
+            except Exception as e:
+                return RestoreResult(
+                    success=False,
+                    volumes_restored=[],
+                    errors=[f"Failed to extract backup: {e}"],
+                )
+            
+            # Get list of volumes in backup
+            backup_volumes = [d.name for d in tmpdir_path.iterdir() if d.is_dir()]
+            
+            # Get project volumes
+            project_volumes = {v.name for v in self.list_volumes(project)}
+            
+            for volume_name in backup_volumes:
+                # Check if volume exists in project
+                if volume_name not in project_volumes:
+                    errors.append(
+                        f"Volume '{volume_name}' from backup not found in project"
+                    )
+                    continue
+                
+                volume_dir = tmpdir_path / volume_name
+                
+                try:
+                    # Use docker run to restore volume data
+                    cmd = [
+                        "docker", "run", "--rm",
+                        "-v", f"{volume_name}:/dest",
+                        "-v", f"{volume_dir}:/source:ro",
+                        "alpine",
+                        "sh", "-c", "rm -rf /dest/* /dest/..?* /dest/.[!.]* 2>/dev/null; cp -a /source/. /dest/"
+                    ]
+                    
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=300,
+                    )
+                    
+                    if result.returncode == 0:
+                        restored.append(volume_name)
+                    else:
+                        errors.append(f"Failed to restore '{volume_name}': {result.stderr}")
+                        
+                except subprocess.TimeoutExpired:
+                    errors.append(f"Timeout while restoring '{volume_name}'")
+                except Exception as e:
+                    errors.append(f"Error restoring '{volume_name}': {e}")
+        
+        return RestoreResult(
+            success=len(restored) > 0,
+            volumes_restored=restored,
+            errors=errors,
+        )
+
+    def list_backups(
+        self,
+        project_name: str,
+        backup_dir: Path,
+    ) -> list[BackupInfo]:
+        """List available backups for a project.
+        
+        Scans the backup directory for tar.gz files matching the project name.
+        
+        Args:
+            project_name: Name of the project to find backups for
+            backup_dir: Directory containing backup files
+            
+        Returns:
+            List of BackupInfo objects sorted by creation date (newest first)
+        """
+        import tarfile
+        from datetime import datetime
+        
+        backup_dir = Path(backup_dir)
+        
+        if not backup_dir.exists():
+            return []
+        
+        backups: list[BackupInfo] = []
+        
+        # Find matching backup files
+        pattern = f"{project_name}_*.tar.gz"
+        for backup_file in backup_dir.glob(pattern):
+            try:
+                # Get file stats
+                stat = backup_file.stat()
+                
+                # Parse timestamp from filename
+                # Format: projectname_YYYYMMDD_HHMMSS.tar.gz
+                name_parts = backup_file.stem.replace(".tar", "").split("_")
+                if len(name_parts) >= 3:
+                    date_str = f"{name_parts[-2]}_{name_parts[-1]}"
+                    try:
+                        created_at = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
+                    except ValueError:
+                        created_at = datetime.fromtimestamp(stat.st_mtime)
+                else:
+                    created_at = datetime.fromtimestamp(stat.st_mtime)
+                
+                # Get list of volumes in backup
+                volumes: list[str] = []
+                try:
+                    with tarfile.open(backup_file, "r:gz") as tar:
+                        # Get top-level directories (volume names)
+                        volumes = list({
+                            m.name.split("/")[0] 
+                            for m in tar.getmembers() 
+                            if "/" in m.name or m.isdir()
+                        })
+                except Exception:
+                    pass
+                
+                backups.append(BackupInfo(
+                    filename=backup_file.name,
+                    project_name=project_name,
+                    volumes=volumes,
+                    created_at=created_at,
+                    size_bytes=stat.st_size,
+                ))
+                
+            except Exception:
+                continue
+        
+        # Sort by creation date (newest first)
+        backups.sort(key=lambda b: b.created_at, reverse=True)
+        
+        return backups
