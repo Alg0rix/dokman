@@ -1,5 +1,10 @@
 """Resource manager service for Dokman."""
 
+import logging
+import re
+import subprocess
+import tarfile
+import tempfile
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +22,53 @@ from dokman.models.resources import (
     VolumeInfo,
 )
 from dokman.models.results import BuildResult, PullResult
+
+logger = logging.getLogger(__name__)
+
+# Regex pattern for validating volume/project names
+# Docker volume names must match: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+_SAFE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
+
+
+def _is_safe_name(name: str) -> bool:
+    """Check if a name is safe for use in file paths and Docker commands.
+    
+    Args:
+        name: The name to validate (volume name, project name, etc.)
+        
+    Returns:
+        True if the name is safe, False otherwise
+    """
+    if not name or len(name) > 255:
+        return False
+    # Reject path traversal attempts
+    if ".." in name or "/" in name or "\\" in name:
+        return False
+    return bool(_SAFE_NAME_PATTERN.match(name))
+
+
+def _safe_extract(tar: tarfile.TarFile, path: Path) -> None:
+    """Safely extract tar archive with path traversal protection.
+    
+    This function validates that all extracted files stay within
+    the target directory.
+    
+    Args:
+        tar: The tarfile to extract
+        path: The target directory for extraction
+        
+    Raises:
+        ValueError: If a member would extract outside the target directory
+    """
+    path = path.resolve()
+    for member in tar.getmembers():
+        member_path = (path / member.name).resolve()
+        # Check if the resolved path is within the target directory
+        if not str(member_path).startswith(str(path)):
+            raise ValueError(
+                f"Refusing to extract '{member.name}': would escape target directory"
+            )
+    tar.extractall(path)
 
 
 class ResourceManager:
@@ -704,17 +756,22 @@ class ResourceManager:
         Returns:
             BackupResult with backup path and status
         """
-        import subprocess
-        import tarfile
-        import tempfile
-        from datetime import datetime
+        # Validate project name to prevent path traversal in backup filename
+        if not _is_safe_name(project.name):
+            return BackupResult(
+                success=False,
+                backup_path=None,
+                volumes_backed_up=[],
+                volumes_skipped=[],
+                errors=[f"Invalid project name '{project.name}': contains unsafe characters"],
+            )
         
         # Get volumes for this project
         volumes = self.list_volumes(project)
         
         if not volumes:
             return BackupResult(
-                success=True,
+                success=False,  # Consistent: no backup created = not successful
                 backup_path=None,
                 volumes_backed_up=[],
                 volumes_skipped=[],
@@ -748,16 +805,33 @@ class ResourceManager:
         
         # Create a temporary directory to collect volume data
         with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
+            tmpdir_path = Path(tmpdir).resolve()
             
             for volume in volumes:
                 volume_name = volume.name
-                volume_dir = tmpdir_path / volume_name
-                volume_dir.mkdir()
+                
+                # Validate volume name to prevent path traversal
+                if not _is_safe_name(volume_name):
+                    errors.append(
+                        f"Skipping volume '{volume_name}': unsafe name (possible path traversal)"
+                    )
+                    skipped.append(volume_name)
+                    continue
+                
+                # Ensure the volume directory stays within tmpdir
+                volume_dir = (tmpdir_path / volume_name).resolve()
+                if not str(volume_dir).startswith(str(tmpdir_path)):
+                    errors.append(
+                        f"Skipping volume '{volume_name}': path escapes temporary directory"
+                    )
+                    skipped.append(volume_name)
+                    continue
+                
+                volume_dir.mkdir(exist_ok=True)
                 
                 try:
                     # Use docker run to copy volume data to temp dir
-                    # Mount volume as /data and copy to bound tmpdir
+                    # Volume name is validated above, safe to use in command
                     cmd = [
                         "docker", "run", "--rm",
                         "-v", f"{volume_name}:/source:ro",
@@ -845,11 +919,19 @@ class ResourceManager:
         
         # Extract to temp directory
         with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
+            tmpdir_path = Path(tmpdir).resolve()
             
             try:
                 with tarfile.open(backup_path, "r:gz") as tar:
-                    tar.extractall(tmpdir_path)
+                    # Use safe extraction to prevent path traversal attacks
+                    _safe_extract(tar, tmpdir_path)
+            except ValueError as e:
+                # Path traversal attempt detected
+                return RestoreResult(
+                    success=False,
+                    volumes_restored=[],
+                    errors=[f"Security error extracting backup: {e}"],
+                )
             except Exception as e:
                 return RestoreResult(
                     success=False,
@@ -864,6 +946,13 @@ class ResourceManager:
             project_volumes = {v.name for v in self.list_volumes(project)}
             
             for volume_name in backup_volumes:
+                # Validate volume name to prevent command injection
+                if not _is_safe_name(volume_name):
+                    errors.append(
+                        f"Skipping volume '{volume_name}': unsafe name in backup"
+                    )
+                    continue
+                
                 # Check if volume exists in project
                 if volume_name not in project_volumes:
                     errors.append(
@@ -875,6 +964,7 @@ class ResourceManager:
                 
                 try:
                     # Use docker run to restore volume data
+                    # Volume name is validated above, safe to use in command
                     cmd = [
                         "docker", "run", "--rm",
                         "-v", f"{volume_name}:/dest",
@@ -922,15 +1012,21 @@ class ResourceManager:
         Returns:
             List of BackupInfo objects sorted by creation date (newest first)
         """
-        import tarfile
-        from datetime import datetime
-        
         backup_dir = Path(backup_dir)
         
         if not backup_dir.exists():
             return []
         
+        # Validate project name to prevent glob pattern injection
+        if not _is_safe_name(project_name):
+            logger.warning(
+                "Invalid project name '%s' for backup listing: contains unsafe characters",
+                project_name
+            )
+            return []
+        
         backups: list[BackupInfo] = []
+        failed_count = 0
         
         # Find matching backup files
         pattern = f"{project_name}_*.tar.gz"
@@ -956,13 +1052,19 @@ class ResourceManager:
                 try:
                     with tarfile.open(backup_file, "r:gz") as tar:
                         # Get top-level directories (volume names)
+                        # Filter for directories only and strip trailing slashes
                         volumes = list({
-                            m.name.split("/")[0] 
-                            for m in tar.getmembers() 
-                            if "/" in m.name or m.isdir()
+                            m.name.rstrip("/")
+                            for m in tar.getmembers()
+                            if m.isdir() and "/" not in m.name.rstrip("/")
                         })
-                except Exception:
-                    pass
+                except Exception as e:
+                    # If the backup archive is unreadable or malformed, we still want to
+                    # list the backup entry; in that case we simply leave `volumes` empty.
+                    logger.debug(
+                        "Could not read volume list from backup '%s': %s",
+                        backup_file.name, e
+                    )
                 
                 backups.append(BackupInfo(
                     filename=backup_file.name,
@@ -972,8 +1074,20 @@ class ResourceManager:
                     size_bytes=stat.st_size,
                 ))
                 
-            except Exception:
+            except Exception as e:
+                # Log the error but continue processing other backups
+                failed_count += 1
+                logger.warning(
+                    "Failed to read backup file '%s': %s",
+                    backup_file.name, e
+                )
                 continue
+        
+        if failed_count > 0:
+            logger.info(
+                "Skipped %d backup file(s) due to read errors for project '%s'",
+                failed_count, project_name
+            )
         
         # Sort by creation date (newest first)
         backups.sort(key=lambda b: b.created_at, reverse=True)

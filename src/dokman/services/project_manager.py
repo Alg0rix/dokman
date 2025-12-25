@@ -90,6 +90,17 @@ class ProjectManager:
 
         return None
 
+    def get_registered_names(self) -> set[str]:
+        """Get the names of all registered projects.
+        
+        This is useful for determining which projects from a list
+        are registered vs discovered.
+        
+        Returns:
+            Set of registered project names
+        """
+        return {p.name for p in self._registry.list_all()}
+
     def get_project_by_path(self, path: Path) -> Project | None:
         """Get a project by its directory path.
         

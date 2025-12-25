@@ -22,6 +22,7 @@ from dokman.services.project_manager import ProjectManager
 from dokman.services.resource_manager import ResourceManager
 from dokman.services.service_manager import ServiceManager
 from dokman.storage.registry import ProjectRegistry
+from dokman.models.project import Project
 
 # Console for output
 console = Console()
@@ -72,6 +73,45 @@ def get_resource_manager() -> ResourceManager:
     docker = DockerClient()
     compose = ComposeClient()
     return ResourceManager(docker, compose)
+
+
+def resolve_project(
+    pm: ProjectManager,
+    project_name: str | None,
+    auto_detect_message: bool = True,
+) -> "Project":
+    """Resolve a project by name or auto-detect from current directory.
+    
+    This helper reduces code duplication across commands that need to
+    resolve a project from either an explicit name or the current directory.
+    
+    Args:
+        pm: ProjectManager instance
+        project_name: Explicit project name, or None to auto-detect
+        auto_detect_message: If True, print a message when auto-detecting
+        
+    Returns:
+        The resolved Project
+        
+    Raises:
+        ProjectNotFoundError: If project name given but not found
+        typer.Exit: If no project specified and none found in current directory
+    """
+    if project_name:
+        proj = pm.get_project(project_name)
+        if proj is None:
+            raise ProjectNotFoundError(project_name)
+        return proj
+    
+    # Auto-detect from current directory
+    proj = pm.get_project_by_path(Path.cwd())
+    if proj:
+        if auto_detect_message:
+            console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
+        return proj
+    
+    console.print("[red]Error:[/red] No project specified and none found in current directory.")
+    raise typer.Exit(EXIT_GENERAL_ERROR)
 
 
 def handle_error(e: Exception) -> None:
@@ -149,8 +189,8 @@ def list_projects(
         
         # If --register flag is set, offer to register unregistered projects
         if register:
-            # Get registered project names
-            registered_names = {p.name for p in pm._registry.list_all()}
+            # Get registered project names using public API
+            registered_names = pm.get_registered_names()
             
             # Find unregistered projects from the list
             unregistered = [p for p in projects if p.name not in registered_names]
@@ -1337,19 +1377,7 @@ def backup_project(
         pm = get_project_manager()
         rm = get_resource_manager()
 
-        if project:
-            proj = pm.get_project(project)
-        else:
-            proj = pm.get_project_by_path(Path.cwd())
-            if proj:
-                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
-
-        if proj is None:
-            if project:
-                raise ProjectNotFoundError(project)
-            else:
-                console.print("[red]Error:[/red] No project specified and none found in current directory.")
-                raise typer.Exit(EXIT_GENERAL_ERROR)
+        proj = resolve_project(pm, project)
 
         console.print(f"[dim]Backing up volumes for '{proj.name}'...[/dim]")
         result = rm.backup_volumes(proj, output, service)
@@ -1404,19 +1432,7 @@ def restore_project(
         pm = get_project_manager()
         rm = get_resource_manager()
 
-        if project:
-            proj = pm.get_project(project)
-        else:
-            proj = pm.get_project_by_path(Path.cwd())
-            if proj:
-                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
-
-        if proj is None:
-            if project:
-                raise ProjectNotFoundError(project)
-            else:
-                console.print("[red]Error:[/red] No project specified and none found in current directory.")
-                raise typer.Exit(EXIT_GENERAL_ERROR)
+        proj = resolve_project(pm, project)
 
         if backup_from is None:
             console.print("[red]Error:[/red] --from option is required. Specify the backup file path.")
@@ -1529,19 +1545,7 @@ def diff_project(
         compose = ComposeClient()
         cm = ConfigManager(docker, compose)
 
-        if project:
-            proj = pm.get_project(project)
-        else:
-            proj = pm.get_project_by_path(Path.cwd())
-            if proj:
-                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
-
-        if proj is None:
-            if project:
-                raise ProjectNotFoundError(project)
-            else:
-                console.print("[red]Error:[/red] No project specified and none found in current directory.")
-                raise typer.Exit(EXIT_GENERAL_ERROR)
+        proj = resolve_project(pm, project)
 
         diff = cm.diff_project(proj)
 
