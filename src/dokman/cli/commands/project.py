@@ -135,7 +135,7 @@ def info_project(
             formatter.print_json(proj)
         else:
             console.print(f"\n[bold cyan]{proj.name}[/bold cyan]")
-            console.print(f"  Status: [{formatter._get_health_style(proj.status)}]{proj.status.value}[/{formatter._get_health_style(proj.status)}]")
+            console.print(f"  Status: [{formatter.get_health_style(proj.status)}]{proj.status.value}[/{formatter.get_health_style(proj.status)}]")
             console.print(f"  Compose file: [dim]{proj.compose_file}[/dim]")
             console.print(f"  Working dir: [dim]{proj.working_dir}[/dim]")
             console.print()

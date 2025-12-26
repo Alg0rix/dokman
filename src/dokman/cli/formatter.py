@@ -114,7 +114,7 @@ class OutputFormatter:
         table.add_column("Compose File", style="dim")
 
         for project in projects:
-            status_style = self._get_health_style(project.status)
+            status_style = self.get_health_style(project.status)
             table.add_row(
                 project.name,
                 f"[{status_style}]{project.status.value}[/{status_style}]",
@@ -425,7 +425,7 @@ class OutputFormatter:
     # Helper Methods
     # -------------------------------------------------------------------------
 
-    def _get_health_style(self, health: ProjectHealth) -> str:
+    def get_health_style(self, health: ProjectHealth) -> str:
         """Get the style for a project health status."""
         styles = {
             ProjectHealth.HEALTHY: "green",
