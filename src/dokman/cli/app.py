@@ -18,6 +18,7 @@ from dokman.exceptions import (
     ServiceNotFoundError,
     ServiceNotRunningError,
 )
+from dokman.services.config_manager import ConfigManager
 from dokman.services.project_manager import ProjectManager
 from dokman.services.resource_manager import ResourceManager
 from dokman.services.service_manager import ServiceManager
@@ -1537,8 +1538,6 @@ def diff_project(
     Detects drift between the docker-compose.yml file and the actual
     running containers. Shows differences in images, ports, and environment.
     """
-    from dokman.services.config_manager import ConfigManager
-    
     try:
         pm = get_project_manager()
         docker = DockerClient()
