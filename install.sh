@@ -122,6 +122,11 @@ main() {
         info "uv is already installed"
     fi
     
+    # Check Python version
+    if ! check_python; then
+        warn "Python 3.13+ not found. uv will attempt to download it automatically."
+    fi
+    
     # Check if dokman is already installed - upgrade if so
     if is_dokman_installed; then
         info "dokman is already installed, upgrading..."
