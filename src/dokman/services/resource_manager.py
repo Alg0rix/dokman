@@ -1,12 +1,19 @@
 """Resource manager service for Dokman."""
 
+import logging
+import re
+import subprocess
+import tarfile
+import tempfile
 from collections.abc import Iterator
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from dokman.clients.compose_client import ComposeClient
 from dokman.clients.docker_client import DockerClient
 from dokman.exceptions import DokmanError
+from dokman.models.backup import BackupInfo, BackupResult, RestoreResult
 from dokman.models.project import Project
 from dokman.models.resources import (
     ContainerStats,
@@ -15,6 +22,53 @@ from dokman.models.resources import (
     VolumeInfo,
 )
 from dokman.models.results import BuildResult, PullResult
+
+logger = logging.getLogger(__name__)
+
+# Regex pattern for validating volume/project names
+# Docker volume names must match: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+_SAFE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
+
+
+def _is_safe_name(name: str) -> bool:
+    """Check if a name is safe for use in file paths and Docker commands.
+    
+    Args:
+        name: The name to validate (volume name, project name, etc.)
+        
+    Returns:
+        True if the name is safe, False otherwise
+    """
+    if not name or len(name) > 255:
+        return False
+    # Reject path traversal attempts
+    if ".." in name or "/" in name or "\\" in name:
+        return False
+    return bool(_SAFE_NAME_PATTERN.match(name))
+
+
+def _safe_extract(tar: tarfile.TarFile, path: Path) -> None:
+    """Safely extract tar archive with path traversal protection.
+    
+    This function validates that all extracted files stay within
+    the target directory.
+    
+    Args:
+        tar: The tarfile to extract
+        path: The target directory for extraction
+        
+    Raises:
+        ValueError: If a member would extract outside the target directory
+    """
+    path = path.resolve()
+    for member in tar.getmembers():
+        member_path = (path / member.name).resolve()
+        # Check if the resolved path is within the target directory
+        if not str(member_path).startswith(str(path)):
+            raise ValueError(
+                f"Refusing to extract '{member.name}': would escape target directory"
+            )
+    tar.extractall(path)
 
 
 class ResourceManager:
@@ -682,3 +736,360 @@ class ResourceManager:
             skipped=skipped,
             failed=failed,
         )
+
+    def backup_volumes(
+        self,
+        project: Project,
+        output_dir: Path,
+        service: str | None = None,
+    ) -> BackupResult:
+        """Backup volumes for a project to a tar archive.
+        
+        Creates a tar.gz archive containing all volume data for the project.
+        Uses docker run with alpine to stream volume data.
+        
+        Args:
+            project: Project to backup volumes for
+            output_dir: Directory to save the backup file
+            service: Specific service to backup volumes for (None for all)
+            
+        Returns:
+            BackupResult with backup path and status
+        """
+        # Validate project name to prevent path traversal in backup filename
+        if not _is_safe_name(project.name):
+            return BackupResult(
+                success=False,
+                backup_path=None,
+                volumes_backed_up=[],
+                volumes_skipped=[],
+                errors=[f"Invalid project name '{project.name}': contains unsafe characters"],
+            )
+        
+        # Get volumes for this project
+        volumes = self.list_volumes(project)
+        
+        if not volumes:
+            return BackupResult(
+                success=False,  # Consistent: no backup created = not successful
+                backup_path=None,
+                volumes_backed_up=[],
+                volumes_skipped=[],
+                errors=["No volumes found for project"],
+            )
+        
+        # Filter by service if specified
+        if service:
+            volumes = [v for v in volumes if service in v.used_by]
+            if not volumes:
+                return BackupResult(
+                    success=False,
+                    backup_path=None,
+                    volumes_backed_up=[],
+                    volumes_skipped=[],
+                    errors=[f"No volumes found for service '{service}'"],
+                )
+        
+        # Create output directory if needed
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate backup filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"{project.name}_{timestamp}.tar.gz"
+        backup_path = output_dir / backup_filename
+        
+        backed_up: list[str] = []
+        skipped: list[str] = []
+        errors: list[str] = []
+        
+        # Create a temporary directory to collect volume data
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir).resolve()
+            
+            for volume in volumes:
+                volume_name = volume.name
+                
+                # Validate volume name to prevent path traversal
+                if not _is_safe_name(volume_name):
+                    errors.append(
+                        f"Skipping volume '{volume_name}': unsafe name (possible path traversal)"
+                    )
+                    skipped.append(volume_name)
+                    continue
+                
+                # Ensure the volume directory stays within tmpdir
+                volume_dir = (tmpdir_path / volume_name).resolve()
+                if not str(volume_dir).startswith(str(tmpdir_path)):
+                    errors.append(
+                        f"Skipping volume '{volume_name}': path escapes temporary directory"
+                    )
+                    skipped.append(volume_name)
+                    continue
+                
+                volume_dir.mkdir(exist_ok=True)
+                
+                try:
+                    # Use docker run to copy volume data to temp dir
+                    # Volume name is validated above, safe to use in command
+                    cmd = [
+                        "docker", "run", "--rm",
+                        "-v", f"{volume_name}:/source:ro",
+                        "-v", f"{volume_dir}:/backup",
+                        "alpine",
+                        "sh", "-c", "cp -a /source/. /backup/"
+                    ]
+                    
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=300,  # 5 minute timeout per volume
+                    )
+                    
+                    if result.returncode == 0:
+                        backed_up.append(volume_name)
+                    else:
+                        errors.append(f"Failed to backup '{volume_name}': {result.stderr}")
+                        skipped.append(volume_name)
+                        
+                except subprocess.TimeoutExpired:
+                    errors.append(f"Timeout while backing up '{volume_name}'")
+                    skipped.append(volume_name)
+                except Exception as e:
+                    errors.append(f"Error backing up '{volume_name}': {e}")
+                    skipped.append(volume_name)
+            
+            # Create the final tar.gz archive
+            if backed_up:
+                try:
+                    with tarfile.open(backup_path, "w:gz") as tar:
+                        for volume_name in backed_up:
+                            volume_dir = tmpdir_path / volume_name
+                            tar.add(volume_dir, arcname=volume_name)
+                except Exception as e:
+                    return BackupResult(
+                        success=False,
+                        backup_path=None,
+                        volumes_backed_up=[],
+                        volumes_skipped=list(v.name for v in volumes),
+                        errors=[f"Failed to create archive: {e}"],
+                    )
+        
+        return BackupResult(
+            success=len(backed_up) > 0,
+            backup_path=str(backup_path) if backed_up else None,
+            volumes_backed_up=backed_up,
+            volumes_skipped=skipped,
+            errors=errors,
+        )
+
+    def restore_volumes(
+        self,
+        project: Project,
+        backup_path: Path,
+    ) -> RestoreResult:
+        """Restore volumes from a tar archive.
+        
+        Extracts volume data from a backup archive and restores it to
+        the corresponding Docker volumes.
+        
+        Args:
+            project: Project to restore volumes for
+            backup_path: Path to the backup tar.gz file
+            
+        Returns:
+            RestoreResult with restored volumes and status
+        """
+        import subprocess
+        import tarfile
+        import tempfile
+        
+        backup_path = Path(backup_path)
+        
+        if not backup_path.exists():
+            return RestoreResult(
+                success=False,
+                volumes_restored=[],
+                errors=[f"Backup file not found: {backup_path}"],
+            )
+        
+        restored: list[str] = []
+        errors: list[str] = []
+        
+        # Extract to temp directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir).resolve()
+            
+            try:
+                with tarfile.open(backup_path, "r:gz") as tar:
+                    # Use safe extraction to prevent path traversal attacks
+                    _safe_extract(tar, tmpdir_path)
+            except ValueError as e:
+                # Path traversal attempt detected
+                return RestoreResult(
+                    success=False,
+                    volumes_restored=[],
+                    errors=[f"Security error extracting backup: {e}"],
+                )
+            except Exception as e:
+                return RestoreResult(
+                    success=False,
+                    volumes_restored=[],
+                    errors=[f"Failed to extract backup: {e}"],
+                )
+            
+            # Get list of volumes in backup
+            backup_volumes = [d.name for d in tmpdir_path.iterdir() if d.is_dir()]
+            
+            # Get project volumes
+            project_volumes = {v.name for v in self.list_volumes(project)}
+            
+            for volume_name in backup_volumes:
+                # Validate volume name to prevent command injection
+                if not _is_safe_name(volume_name):
+                    errors.append(
+                        f"Skipping volume '{volume_name}': unsafe name in backup"
+                    )
+                    continue
+                
+                # Check if volume exists in project
+                if volume_name not in project_volumes:
+                    errors.append(
+                        f"Volume '{volume_name}' from backup not found in project"
+                    )
+                    continue
+                
+                volume_dir = tmpdir_path / volume_name
+                
+                try:
+                    # Use docker run to restore volume data
+                    # Volume name is validated above, safe to use in command
+                    cmd = [
+                        "docker", "run", "--rm",
+                        "-v", f"{volume_name}:/dest",
+                        "-v", f"{volume_dir}:/source:ro",
+                        "alpine",
+                        "sh", "-c", "rm -rf /dest/* /dest/..?* /dest/.[!.]* 2>/dev/null; cp -a /source/. /dest/"
+                    ]
+                    
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=300,
+                    )
+                    
+                    if result.returncode == 0:
+                        restored.append(volume_name)
+                    else:
+                        errors.append(f"Failed to restore '{volume_name}': {result.stderr}")
+                        
+                except subprocess.TimeoutExpired:
+                    errors.append(f"Timeout while restoring '{volume_name}'")
+                except Exception as e:
+                    errors.append(f"Error restoring '{volume_name}': {e}")
+        
+        return RestoreResult(
+            success=len(restored) > 0,
+            volumes_restored=restored,
+            errors=errors,
+        )
+
+    def list_backups(
+        self,
+        project_name: str,
+        backup_dir: Path,
+    ) -> list[BackupInfo]:
+        """List available backups for a project.
+        
+        Scans the backup directory for tar.gz files matching the project name.
+        
+        Args:
+            project_name: Name of the project to find backups for
+            backup_dir: Directory containing backup files
+            
+        Returns:
+            List of BackupInfo objects sorted by creation date (newest first)
+        """
+        backup_dir = Path(backup_dir)
+        
+        if not backup_dir.exists():
+            return []
+        
+        # Validate project name to prevent glob pattern injection
+        if not _is_safe_name(project_name):
+            logger.warning(
+                "Invalid project name '%s' for backup listing: contains unsafe characters",
+                project_name
+            )
+            return []
+        
+        backups: list[BackupInfo] = []
+        failed_count = 0
+        
+        # Find matching backup files
+        pattern = f"{project_name}_*.tar.gz"
+        for backup_file in backup_dir.glob(pattern):
+            try:
+                # Get file stats
+                stat = backup_file.stat()
+                
+                # Parse timestamp from filename
+                # Format: projectname_YYYYMMDD_HHMMSS.tar.gz
+                name_parts = backup_file.stem.replace(".tar", "").split("_")
+                if len(name_parts) >= 3:
+                    date_str = f"{name_parts[-2]}_{name_parts[-1]}"
+                    try:
+                        created_at = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
+                    except ValueError:
+                        created_at = datetime.fromtimestamp(stat.st_mtime)
+                else:
+                    created_at = datetime.fromtimestamp(stat.st_mtime)
+                
+                # Get list of volumes in backup
+                volumes: list[str] = []
+                try:
+                    with tarfile.open(backup_file, "r:gz") as tar:
+                        # Get top-level directories (volume names)
+                        # Filter for directories only and strip trailing slashes
+                        volumes = list({
+                            m.name.rstrip("/")
+                            for m in tar.getmembers()
+                            if m.isdir() and "/" not in m.name.rstrip("/")
+                        })
+                except Exception as e:
+                    # If the backup archive is unreadable or malformed, we still want to
+                    # list the backup entry; in that case we simply leave `volumes` empty.
+                    logger.debug(
+                        "Could not read volume list from backup '%s': %s",
+                        backup_file.name, e
+                    )
+                
+                backups.append(BackupInfo(
+                    filename=backup_file.name,
+                    project_name=project_name,
+                    volumes=volumes,
+                    created_at=created_at,
+                    size_bytes=stat.st_size,
+                ))
+                
+            except Exception as e:
+                # Log the error but continue processing other backups
+                failed_count += 1
+                logger.warning(
+                    "Failed to read backup file '%s': %s",
+                    backup_file.name, e
+                )
+                continue
+        
+        if failed_count > 0:
+            logger.info(
+                "Skipped %d backup file(s) due to read errors for project '%s'",
+                failed_count, project_name
+            )
+        
+        # Sort by creation date (newest first)
+        backups.sort(key=lambda b: b.created_at, reverse=True)
+        
+        return backups
