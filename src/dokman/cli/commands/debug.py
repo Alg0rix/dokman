@@ -200,7 +200,7 @@ def stream_events(
         # We need the project name for filtering
         project_name = proj.name
 
-        console.print(f"[dim]Streaming events for project '{project}'... (Ctrl+C to stop)[/dim]\n")
+        console.print(f"[dim]Streaming events for project '{project_name}'... (Ctrl+C to stop)[/dim]\n")
 
         # Filter events by project label
         filters = {
