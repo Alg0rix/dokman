@@ -11,11 +11,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from packaging.version import parse as parse_version, InvalidVersion
+
 import dokman
 
 
-# Cache settings
-CACHE_DIR = Path.home() / ".dokman"
+# Cache settings (uses same config directory as project registry)
+CACHE_DIR = Path.home() / ".config" / "dokman"
 CACHE_FILE = CACHE_DIR / "version_cache.json"
 CACHE_TTL_SECONDS = 86400  # 24 hours
 
@@ -98,28 +100,14 @@ class VersionChecker:
     def _compare_versions(self, current: str, latest: str) -> bool:
         """Check if latest version is newer than current.
         
-        Uses simple tuple comparison of version parts.
+        Uses packaging.version for proper PEP 440 version comparison.
         
         Returns:
             True if latest > current
         """
-        def parse_version(v: str) -> tuple:
-            """Parse version string into comparable tuple."""
-            parts = []
-            for part in v.split("."):
-                # Handle versions like "1.0.0a1" by splitting on non-digits
-                numeric = ""
-                for char in part:
-                    if char.isdigit():
-                        numeric += char
-                    else:
-                        break
-                parts.append(int(numeric) if numeric else 0)
-            return tuple(parts)
-        
         try:
             return parse_version(latest) > parse_version(current)
-        except (ValueError, AttributeError):
+        except InvalidVersion:
             return False
     
     def check_for_update(self, use_cache: bool = True) -> Optional[UpdateInfo]:
