@@ -142,7 +142,25 @@ def handle_error(e: Exception) -> None:
 @app.callback()
 def main() -> None:
     """Dokman - Manage Docker Compose deployments from anywhere."""
-    pass
+    # Check for updates (uses cache to avoid repeated network calls)
+    try:
+        from dokman.services.version_checker import VersionChecker
+        checker = VersionChecker()
+        update_info = checker.check_for_update()
+        if update_info:
+            console.print()
+            console.print(
+                f"[bold cyan]📦 Update available:[/bold cyan] "
+                f"dokman [green]{update_info.latest_version}[/green] "
+                f"[dim](current: {update_info.current_version})[/dim]"
+            )
+            console.print(
+                f"   Run [yellow]`{update_info.upgrade_command}`[/yellow] to update"
+            )
+            console.print()
+    except Exception:
+        # Never let update check break the CLI
+        pass
 
 
 # -----------------------------------------------------------------------------
