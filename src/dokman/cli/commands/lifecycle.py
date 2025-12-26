@@ -6,16 +6,15 @@ from typing import Annotated, Optional
 import typer
 
 from dokman.cli.helpers import (
-    EXIT_GENERAL_ERROR,
     EXIT_OPERATION_FAILED,
     OutputFormat,
-    console,
     formatter,
     get_project_manager,
     get_service_manager,
     handle_error,
+    resolve_project,
 )
-from dokman.exceptions import DokmanError, ProjectNotFoundError
+from dokman.exceptions import DokmanError
 
 
 app = typer.Typer()
@@ -43,20 +42,7 @@ def start_services(
     try:
         pm = get_project_manager()
         sm = get_service_manager()
-
-        if project:
-            proj = pm.get_project(project)
-        else:
-            proj = pm.get_project_by_path(Path.cwd())
-            if proj:
-                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
-
-        if proj is None:
-            if project:
-                raise ProjectNotFoundError(project)
-            else:
-                console.print("[red]Error:[/red] No project specified and none found in current directory.")
-                raise typer.Exit(EXIT_GENERAL_ERROR)
+        proj = resolve_project(pm, project)
 
         result = sm.start(proj, service)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -89,20 +75,7 @@ def stop_services(
     try:
         pm = get_project_manager()
         sm = get_service_manager()
-
-        if project:
-            proj = pm.get_project(project)
-        else:
-            proj = pm.get_project_by_path(Path.cwd())
-            if proj:
-                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
-
-        if proj is None:
-            if project:
-                raise ProjectNotFoundError(project)
-            else:
-                console.print("[red]Error:[/red] No project specified and none found in current directory.")
-                raise typer.Exit(EXIT_GENERAL_ERROR)
+        proj = resolve_project(pm, project)
 
         result = sm.stop(proj, service)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -136,20 +109,7 @@ def restart_services(
     try:
         pm = get_project_manager()
         sm = get_service_manager()
-
-        if project:
-            proj = pm.get_project(project)
-        else:
-            proj = pm.get_project_by_path(Path.cwd())
-            if proj:
-                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
-
-        if proj is None:
-            if project:
-                raise ProjectNotFoundError(project)
-            else:
-                console.print("[red]Error:[/red] No project specified and none found in current directory.")
-                raise typer.Exit(EXIT_GENERAL_ERROR)
+        proj = resolve_project(pm, project)
 
         result = sm.restart(proj, service)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -183,20 +143,7 @@ def down_project(
     try:
         pm = get_project_manager()
         sm = get_service_manager()
-
-        if project:
-            proj = pm.get_project(project)
-        else:
-            proj = pm.get_project_by_path(Path.cwd())
-            if proj:
-                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
-
-        if proj is None:
-            if project:
-                raise ProjectNotFoundError(project)
-            else:
-                console.print("[red]Error:[/red] No project specified and none found in current directory.")
-                raise typer.Exit(EXIT_GENERAL_ERROR)
+        proj = resolve_project(pm, project)
 
         result = sm.down(proj, remove_volumes=volumes)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -235,20 +182,7 @@ def redeploy_project(
     try:
         pm = get_project_manager()
         sm = get_service_manager()
-
-        if project:
-            proj = pm.get_project(project)
-        else:
-            proj = pm.get_project_by_path(Path.cwd())
-            if proj:
-                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
-
-        if proj is None:
-            if project:
-                raise ProjectNotFoundError(project)
-            else:
-                console.print("[red]Error:[/red] No project specified and none found in current directory.")
-                raise typer.Exit(EXIT_GENERAL_ERROR)
+        proj = resolve_project(pm, project)
 
         result = sm.redeploy(proj, pull=not no_pull, strict=strict)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
@@ -280,20 +214,7 @@ def scale_service(
     try:
         pm = get_project_manager()
         sm = get_service_manager()
-
-        if project:
-            proj = pm.get_project(project)
-        else:
-            proj = pm.get_project_by_path(Path.cwd())
-            if proj:
-                console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
-
-        if proj is None:
-            if project:
-                raise ProjectNotFoundError(project)
-            else:
-                console.print("[red]Error:[/red] No project specified and none found in current directory.")
-                raise typer.Exit(EXIT_GENERAL_ERROR)
+        proj = resolve_project(pm, project)
 
         result = sm.scale(proj, service, replicas)
         formatter.print_operation_result(result, as_json=(output_format == OutputFormat.json))
