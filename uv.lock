@@ -89,10 +89,11 @@ wheels = [
 
 [[package]]
 name = "dokman"
-version = "0.1.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "docker" },
+    { name = "packaging" },
     { name = "rich" },
     { name = "typer" },
 ]
@@ -107,6 +108,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "docker", specifier = ">=7.0.0" },
+    { name = "packaging", specifier = ">=24.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.20.1" },
 ]
