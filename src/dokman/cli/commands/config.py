@@ -1,5 +1,6 @@
 """Configuration commands."""
 
+import json
 from typing import Annotated, Optional
 
 import typer
@@ -142,8 +143,6 @@ def show_config(
         if output_format == OutputFormat.json:
             formatter.print_json(config)
         else:
-            # Pretty print the config as YAML-like output
-            import json
             console.print(f"\n[bold cyan]Configuration: {project}[/bold cyan]\n")
             console.print(json.dumps(config, indent=2, default=str))
     except DokmanError as e:
