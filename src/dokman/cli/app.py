@@ -13,6 +13,7 @@ Command modules:
 """
 
 import typer
+from importlib.metadata import version as get_version
 
 from dokman.cli.helpers import console
 
@@ -57,6 +58,12 @@ def main() -> None:
     except Exception:
         # Never let update check break the CLI
         pass
+
+
+@app.command("version")
+def print_version() -> None:
+    """Print the version of dokman."""
+    console.print(f"dokman [bold green]v{get_version('dokman')}[/bold green]")
 
 
 # -----------------------------------------------------------------------------
