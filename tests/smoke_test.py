@@ -3,7 +3,7 @@
 def test_import():
     """Test that the package can be imported."""
     import dokman
-    assert dokman.__doc__.startswith("Dokman")
+    assert dokman.__doc__ is not None and dokman.__doc__.startswith("Dokman")
 
 def test_cli():
     """Test that the CLI entry point works."""

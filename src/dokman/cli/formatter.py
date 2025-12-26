@@ -114,7 +114,7 @@ class OutputFormatter:
         table.add_column("Compose File", style="dim")
 
         for project in projects:
-            status_style = self._get_health_style(project.status)
+            status_style = self.get_health_style(project.status)
             table.add_row(
                 project.name,
                 f"[{status_style}]{project.status.value}[/{status_style}]",
@@ -147,7 +147,7 @@ class OutputFormatter:
         table.add_column("Health")
 
         for service in services:
-            status_style = self._get_status_style(service.status)
+            status_style = self.get_status_style(service.status)
             container_id = service.container_id[:12] if service.container_id else "-"
             ports = ", ".join(service.ports) if service.ports else "-"
             health = service.health or "-"
@@ -425,7 +425,7 @@ class OutputFormatter:
     # Helper Methods
     # -------------------------------------------------------------------------
 
-    def _get_health_style(self, health: ProjectHealth) -> str:
+    def get_health_style(self, health: ProjectHealth) -> str:
         """Get the style for a project health status."""
         styles = {
             ProjectHealth.HEALTHY: "green",
@@ -435,7 +435,7 @@ class OutputFormatter:
         }
         return styles.get(health, "dim")
 
-    def _get_status_style(self, status: ServiceStatus) -> str:
+    def get_status_style(self, status: ServiceStatus) -> str:
         """Get the style for a service status."""
         styles = {
             ServiceStatus.RUNNING: "green",

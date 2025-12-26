@@ -1,6 +1,6 @@
-"""Main entry point for Dockman CLI."""
+"""Main entry point for Dokman CLI."""
 
-from dockman.cli.app import app
+from dokman.cli.app import app
 
 if __name__ == "__main__":
     app()
