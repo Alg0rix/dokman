@@ -19,10 +19,29 @@ Dokman is a Python CLI tool for centralized Docker Compose deployment management
 
 ## Installation
 
-Dokman is published as a Python package on PyPI. We highly recommend installing it with [uv](https://docs.astral.sh/uv/). If you have not installed uv yet, please follow the instructions [here](https://docs.astral.sh/uv/getting-started/installation/) to install it first.
+### Quick Install (Recommended)
+
+The easiest way to install dokman is using the installation script:
 
 ```bash
-# Install using uv (recommended)
+curl -fsSL https://raw.githubusercontent.com/Alg0rix/dokman/main/install.sh | bash
+```
+
+This will automatically install [uv](https://docs.astral.sh/uv/) if needed and set up dokman.
+
+### Upgrade
+
+To upgrade to the latest version, run the install script again or use:
+
+```bash
+uv tool upgrade dokman
+```
+
+### Using uv
+
+If you already have uv installed:
+
+```bash
 uv tool install --python 3.13 dokman
 
 # Verify installation
