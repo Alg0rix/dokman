@@ -25,6 +25,7 @@ from dokman.storage.registry import ProjectRegistry
 
 if TYPE_CHECKING:
     from dokman.models.project import Project
+    from dokman.services.config_manager import ConfigManager
 
 # Console for output
 console = Console()
@@ -68,6 +69,14 @@ def get_resource_manager() -> ResourceManager:
     docker = DockerClient()
     compose = ComposeClient()
     return ResourceManager(docker, compose)
+
+
+def get_config_manager() -> "ConfigManager":
+    """Create and return a ConfigManager instance."""
+    from dokman.services.config_manager import ConfigManager
+    docker = DockerClient()
+    compose = ComposeClient()
+    return ConfigManager(docker, compose)
 
 
 def resolve_project(

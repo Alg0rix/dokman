@@ -17,8 +17,6 @@ from dokman.cli.helpers import (
     handle_error,
     resolve_project,
 )
-from dokman.clients.compose_client import ComposeClient
-from dokman.clients.docker_client import DockerClient
 from dokman.exceptions import DokmanError
 
 
@@ -208,13 +206,11 @@ def diff_project(
     Detects drift between the docker-compose.yml file and the actual
     running containers. Shows differences in images, ports, and environment.
     """
-    from dokman.services.config_manager import ConfigManager
+    from dokman.cli.helpers import get_config_manager
     
     try:
         pm = get_project_manager()
-        docker = DockerClient()
-        compose = ComposeClient()
-        cm = ConfigManager(docker, compose)
+        cm = get_config_manager()
 
         proj = resolve_project(pm, project)
 
