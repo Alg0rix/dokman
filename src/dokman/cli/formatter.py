@@ -147,7 +147,7 @@ class OutputFormatter:
         table.add_column("Health")
 
         for service in services:
-            status_style = self._get_status_style(service.status)
+            status_style = self.get_status_style(service.status)
             container_id = service.container_id[:12] if service.container_id else "-"
             ports = ", ".join(service.ports) if service.ports else "-"
             health = service.health or "-"
@@ -435,7 +435,7 @@ class OutputFormatter:
         }
         return styles.get(health, "dim")
 
-    def _get_status_style(self, status: ServiceStatus) -> str:
+    def get_status_style(self, status: ServiceStatus) -> str:
         """Get the style for a service status."""
         styles = {
             ServiceStatus.RUNNING: "green",

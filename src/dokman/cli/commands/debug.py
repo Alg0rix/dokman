@@ -158,7 +158,7 @@ def show_health(
         else:
             console.print(f"\n[bold cyan]Health Status: {proj.name}[/bold cyan]\n")
             for service in proj.services:
-                status_style = formatter._get_status_style(service.status)
+                status_style = formatter.get_status_style(service.status)
                 health = service.health or "[dim]No health check[/dim]"
                 console.print(
                     f"  {service.name}: [{status_style}]{service.status.value}[/{status_style}] - {health}"

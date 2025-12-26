@@ -38,6 +38,7 @@ EXIT_SERVICE_NOT_FOUND = 3
 EXIT_DOCKER_CONNECTION_ERROR = 4
 EXIT_COMPOSE_FILE_ERROR = 5
 EXIT_OPERATION_FAILED = 6
+EXIT_NO_PROJECT_DETECTED = 7
 
 
 class OutputFormat(str, Enum):
@@ -105,7 +106,7 @@ def resolve_project(
         return proj
     
     console.print("[red]Error:[/red] No project specified and none found in current directory.")
-    raise typer.Exit(EXIT_GENERAL_ERROR)
+    raise typer.Exit(EXIT_NO_PROJECT_DETECTED)
 
 
 def handle_error(e: Exception) -> None:
