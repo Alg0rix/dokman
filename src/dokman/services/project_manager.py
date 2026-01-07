@@ -1,5 +1,6 @@
 """Project manager service for Dokman."""
 
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -38,6 +39,7 @@ class ProjectManager:
         self._registry = registry
         self._docker = docker
         self._compose = compose
+        self._logger = logging.getLogger(__name__)
 
     def list_projects(self, include_unregistered: bool = False) -> list[Project]:
         """List all tracked projects.
@@ -87,7 +89,8 @@ class ProjectManager:
         """
         try:
             return self._build_project_from_registered(reg_project)
-        except Exception:
+        except Exception as e:
+            self._logger.debug("Failed to build project %s: %s", reg_project.name, e)
             return None
 
     def get_project(self, name: str) -> Project | None:
