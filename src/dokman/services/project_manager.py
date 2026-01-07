@@ -1,5 +1,6 @@
 """Project manager service for Dokman."""
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -48,18 +49,25 @@ class ProjectManager:
         Returns:
             List of Project objects with current status
         """
-        projects: list[Project] = []
-
-        # Get registered projects
         registered = self._registry.list_all()
         registered_names = {p.name for p in registered}
 
-        for reg_project in registered:
-            project = self._build_project_from_registered(reg_project)
-            if project:
-                projects.append(project)
+        projects: list[Project] = []
 
-        # Optionally include unregistered running projects
+        if registered:
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                future_to_project = {
+                    executor.submit(self._build_project_safe, reg): reg
+                    for reg in registered
+                }
+                for future in as_completed(future_to_project):
+                    try:
+                        project = future.result()
+                        if project:
+                            projects.append(project)
+                    except Exception:
+                        pass
+
         if include_unregistered:
             discovered = self.discover_projects()
             for project in discovered:
@@ -67,6 +75,20 @@ class ProjectManager:
                     projects.append(project)
 
         return projects
+
+    def _build_project_safe(self, reg_project: RegisteredProject) -> Project | None:
+        """Build a project safely, catching any exceptions.
+
+        Args:
+            reg_project: The registered project to build from
+
+        Returns:
+            Project with current status, or None if an error occurred
+        """
+        try:
+            return self._build_project_from_registered(reg_project)
+        except Exception:
+            return None
 
     def get_project(self, name: str) -> Project | None:
         """Get a project by name.
@@ -77,18 +99,54 @@ class ProjectManager:
         Returns:
             Project object if found, None otherwise
         """
-        # First check registered projects
         reg_project = self._registry.get(name)
         if reg_project:
             return self._build_project_from_registered(reg_project)
 
-        # Check running but unregistered projects
-        discovered = self.discover_projects()
-        for project in discovered:
-            if project.name == name:
-                return project
+        containers = self._docker.list_containers(
+            filters={"label": f"com.docker.compose.project={name}"}
+        )
 
-        return None
+        if not containers:
+            return None
+
+        project = self._build_project_from_containers(name, containers)
+        project.status = self.get_project_status(project)
+        return project
+
+    def _build_project_from_containers(
+        self, project_name: str, containers: list
+    ) -> Project:
+        """Build a Project from Docker containers.
+
+        Args:
+            project_name: Name of the project
+            containers: List of Docker container objects
+
+        Returns:
+            Project with services populated from containers
+        """
+        services = []
+        working_dir = Path.cwd()
+
+        for container in containers:
+            labels = container.labels or {}
+            config_files = labels.get("com.docker.compose.project.config_files", "")
+            if config_files:
+                working_dir = Path(config_files.split(",")[0]).parent
+
+            service = self._build_service_from_container(container)
+            services.append(service)
+
+        compose_file = working_dir / "compose.yaml"
+
+        return Project(
+            name=project_name,
+            compose_file=compose_file,
+            working_dir=working_dir,
+            services=services,
+            status=ProjectHealth.UNKNOWN,
+        )
 
     def get_registered_names(self) -> set[str]:
         """Get the names of all registered projects.
@@ -169,14 +227,16 @@ class ProjectManager:
             attrs = getattr(container, "attrs", {}) or {}
             created = attrs.get("Created", "")[:10] if attrs.get("Created") else None
 
-            orphans.append({
-                "container_id": container.id[:12] if container.id else "",
-                "container_name": container.name,
-                "project_name": project_name,
-                "service_name": service_name,
-                "status": container.status,
-                "created_at": created,
-            })
+            orphans.append(
+                {
+                    "container_id": container.id[:12] if container.id else "",
+                    "container_name": container.name,
+                    "project_name": project_name,
+                    "service_name": service_name,
+                    "status": container.status,
+                    "created_at": created,
+                }
+            )
 
         return orphans
 
@@ -195,7 +255,9 @@ class ProjectManager:
 
         for reg_project, issues in stale:
             issue_descriptions = ", ".join(
-                "missing compose file" if i == "missing_compose_file" else "has orphan containers"
+                "missing compose file"
+                if i == "missing_compose_file"
+                else "has orphan containers"
                 for i in issues
             )
 
@@ -209,37 +271,37 @@ class ProjectManager:
 
     def get_project_by_path(self, path: Path) -> Project | None:
         """Get a project by its directory path.
-        
+
         Args:
             path: Path to project directory or file within it
-            
+
         Returns:
             Project object if found, None otherwise
         """
         # Resolve path
         path = path.resolve()
-        
+
         # If it's a file, get parent directory
         if path.is_file():
             path = path.parent
-            
+
         # First check registered projects
         registered = self._registry.list_all()
         for reg_project in registered:
             if not reg_project.compose_file.exists():
                 continue
-                
+
             project_dir = reg_project.compose_file.parent.resolve()
             if path == project_dir:
                 return self._build_project_from_registered(reg_project)
-                
+
         # Check running but unregistered projects
         # This is more expensive as it queries Docker
         discovered = self.discover_projects()
         for project in discovered:
             if project.working_dir.resolve() == path:
                 return project
-                
+
         # Finally, check if the current directory contains a compose file
         # and if so, return it as an unregistered project
         try:
@@ -256,7 +318,7 @@ class ProjectManager:
                 )
         except Exception:
             pass
-            
+
         return None
 
     def register_project(self, path: Path, name: str | None = None) -> Project:
@@ -274,14 +336,14 @@ class ProjectManager:
             DokmanError: If registration fails
         """
         compose_file = self._resolve_compose_file(path)
-        
+
         if not compose_file.exists():
             raise ComposeFileNotFoundError(compose_file)
-        
+
         # Determine project name
         if name is None:
             name = self._get_project_name_from_compose(compose_file)
-        
+
         # Create registered project
         now = datetime.now()
         reg_project = RegisteredProject(
@@ -290,9 +352,9 @@ class ProjectManager:
             registered_at=now,
             last_accessed=now,
         )
-        
+
         self._registry.add(reg_project)
-        
+
         # Return full project with status
         project = self._build_project_from_registered(reg_project)
         if project is None:
@@ -309,10 +371,10 @@ class ProjectManager:
 
     def unregister_project(self, name: str) -> bool:
         """Remove a project from tracking.
-        
+
         Args:
             name: Name of the project to unregister
-            
+
         Returns:
             True if project was unregistered, False if not found
         """
@@ -320,32 +382,34 @@ class ProjectManager:
 
     def discover_projects(self) -> list[Project]:
         """Discover running Docker Compose projects.
-        
+
         Finds all running Docker Compose projects by querying
         Docker for containers with compose labels.
-        
+
         Returns:
             List of discovered Project objects
         """
         projects: dict[str, Project] = {}
-        
+
         # Get all containers with compose project label
         containers = self._docker.list_containers(
             filters={"label": "com.docker.compose.project"}
         )
-        
+
         for container in containers:
             labels = container.labels or {}
             project_name = labels.get("com.docker.compose.project")
-            
+
             if not project_name:
                 continue
-            
+
             # Get or create project
             if project_name not in projects:
-                working_dir_str = labels.get("com.docker.compose.project.working_dir", "")
+                working_dir_str = labels.get(
+                    "com.docker.compose.project.working_dir", ""
+                )
                 config_files = labels.get("com.docker.compose.project.config_files", "")
-                
+
                 # Parse compose file path
                 if config_files:
                     compose_file = Path(config_files.split(",")[0])
@@ -353,9 +417,11 @@ class ProjectManager:
                     compose_file = self._find_compose_file_in_dir(Path(working_dir_str))
                 else:
                     compose_file = Path("unknown")
-                
-                working_dir = Path(working_dir_str) if working_dir_str else compose_file.parent
-                
+
+                working_dir = (
+                    Path(working_dir_str) if working_dir_str else compose_file.parent
+                )
+
                 projects[project_name] = Project(
                     name=project_name,
                     compose_file=compose_file,
@@ -363,33 +429,33 @@ class ProjectManager:
                     services=[],
                     status=ProjectHealth.UNKNOWN,
                 )
-            
+
             # Add service from container
             service = self._build_service_from_container(container)
             projects[project_name].services.append(service)
-        
+
         # Calculate health for each project
         for project in projects.values():
             project.status = self.get_project_status(project)
-        
+
         return list(projects.values())
 
     def get_project_status(self, project: Project) -> ProjectHealth:
         """Calculate the overall health status of a project.
-        
+
         Args:
             project: Project to evaluate
-            
+
         Returns:
             ProjectHealth enum value based on service states
         """
         if not project.services:
             return ProjectHealth.UNKNOWN
-        
+
         running_count = 0
         unhealthy_count = 0
         stopped_count = 0
-        
+
         for service in project.services:
             if service.status == ServiceStatus.RUNNING:
                 running_count += 1
@@ -400,9 +466,9 @@ class ProjectManager:
                 unhealthy_count += 1
             elif service.status in (ServiceStatus.STOPPED, ServiceStatus.EXITED):
                 stopped_count += 1
-        
+
         total = len(project.services)
-        
+
         # Determine overall health
         if unhealthy_count > 0:
             return ProjectHealth.UNHEALTHY
@@ -412,36 +478,36 @@ class ProjectManager:
             return ProjectHealth.PARTIAL
         if stopped_count == total:
             return ProjectHealth.UNHEALTHY
-        
+
         return ProjectHealth.UNKNOWN
 
     def _build_project_from_registered(
         self, reg_project: RegisteredProject
     ) -> Project | None:
         """Build a full Project from a RegisteredProject.
-        
+
         Args:
             reg_project: The registered project to build from
-            
+
         Returns:
             Project with current status, or None if compose file missing
         """
         if not reg_project.compose_file.exists():
             return None
-        
+
         working_dir = reg_project.compose_file.parent
-        
+
         # Get services from compose ps
         try:
             containers = self._compose.ps(working_dir)
         except DokmanError:
             containers = []
-        
+
         services = []
         for container_info in containers:
             service = self._build_service_from_compose_ps(container_info)
             services.append(service)
-        
+
         project = Project(
             name=reg_project.name,
             compose_file=reg_project.compose_file,
@@ -449,28 +515,32 @@ class ProjectManager:
             services=services,
             status=ProjectHealth.UNKNOWN,
         )
-        
+
         project.status = self.get_project_status(project)
         return project
 
     def _build_service_from_container(self, container) -> Service:
         """Build a Service from a Docker container object.
-        
+
         Args:
             container: Docker SDK Container object
-            
+
         Returns:
             Service instance
         """
         labels = container.labels or {}
         service_name = labels.get("com.docker.compose.service", container.name)
-        
+
         # Get image name
-        image = container.image.tags[0] if container.image.tags else str(container.image.id)[:12]
-        
+        image = (
+            container.image.tags[0]
+            if container.image.tags
+            else str(container.image.id)[:12]
+        )
+
         # Map container status to ServiceStatus
         status = self._map_container_status(container.status)
-        
+
         # Get ports
         ports = []
         if hasattr(container, "ports") and container.ports:
@@ -482,14 +552,14 @@ class ProjectManager:
                             ports.append(f"{host_port}:{port}")
                 else:
                     ports.append(port)
-        
+
         # Get health status
         health = None
         if hasattr(container, "attrs"):
             state = container.attrs.get("State", {})
             health_data = state.get("Health", {})
             health = health_data.get("Status")
-        
+
         # Get uptime (started at)
         uptime = None
         if hasattr(container, "attrs"):
@@ -501,7 +571,7 @@ class ProjectManager:
                     uptime = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
                 except ValueError:
                     pass
-        
+
         return Service(
             name=service_name,
             container_id=container.id[:12] if container.id else None,
@@ -514,21 +584,23 @@ class ProjectManager:
 
     def _build_service_from_compose_ps(self, container_info: dict) -> Service:
         """Build a Service from docker compose ps output.
-        
+
         Args:
             container_info: Dictionary from compose ps --format json
-            
+
         Returns:
             Service instance
         """
         name = container_info.get("Service", container_info.get("Name", "unknown"))
-        container_id = container_info.get("ID", "")[:12] if container_info.get("ID") else None
+        container_id = (
+            container_info.get("ID", "")[:12] if container_info.get("ID") else None
+        )
         image = container_info.get("Image", "unknown")
-        
+
         # Map state to ServiceStatus
         state = container_info.get("State", "").lower()
         status = self._map_compose_state(state)
-        
+
         # Parse ports
         ports = []
         publishers = container_info.get("Publishers", [])
@@ -541,10 +613,10 @@ class ProjectManager:
                         ports.append(f"{published}:{target}")
                     elif target:
                         ports.append(str(target))
-        
+
         # Get health
         health = container_info.get("Health", None)
-        
+
         return Service(
             name=name,
             container_id=container_id,
@@ -557,10 +629,10 @@ class ProjectManager:
 
     def _map_container_status(self, status: str) -> ServiceStatus:
         """Map Docker container status to ServiceStatus enum.
-        
+
         Args:
             status: Docker container status string
-            
+
         Returns:
             ServiceStatus enum value
         """
@@ -578,10 +650,10 @@ class ProjectManager:
 
     def _map_compose_state(self, state: str) -> ServiceStatus:
         """Map docker compose state to ServiceStatus enum.
-        
+
         Args:
             state: State string from compose ps
-            
+
         Returns:
             ServiceStatus enum value
         """
@@ -597,28 +669,28 @@ class ProjectManager:
 
     def _resolve_compose_file(self, path: Path) -> Path:
         """Resolve path to compose file.
-        
+
         Args:
             path: Path to compose file or directory
-            
+
         Returns:
             Path to compose file
         """
         if path.is_file():
             return path.resolve()
-        
+
         if path.is_dir():
             return self._find_compose_file_in_dir(path)
-        
+
         # Path doesn't exist yet, assume it's a file path
         return path.resolve()
 
     def _find_compose_file_in_dir(self, directory: Path) -> Path:
         """Find compose file in a directory.
-        
+
         Args:
             directory: Directory to search
-            
+
         Returns:
             Path to compose file (may not exist)
         """
@@ -629,21 +701,21 @@ class ProjectManager:
             "docker-compose.yaml",
             "docker-compose.yml",
         ]
-        
+
         for name in compose_names:
             compose_file = directory / name
             if compose_file.exists():
                 return compose_file.resolve()
-        
+
         # Default to compose.yaml if none found
         return (directory / "compose.yaml").resolve()
 
     def _get_project_name_from_compose(self, compose_file: Path) -> str:
         """Get project name from compose file or directory.
-        
+
         Args:
             compose_file: Path to compose file
-            
+
         Returns:
             Project name (directory name by default)
         """

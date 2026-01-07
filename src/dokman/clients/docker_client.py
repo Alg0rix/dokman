@@ -18,16 +18,38 @@ class DockerClient:
 
     Provides a simplified interface to Docker operations and wraps
     Docker SDK exceptions into DokmanError types.
+    Supports singleton pattern for connection pooling.
     """
+
+    _shared_instance: "DockerClient | None" = None
 
     def __init__(self) -> None:
         """Initialize Docker client connection."""
         try:
             self._client = docker.from_env()
-            # Test connection
             self._client.ping()
         except DockerException as e:
-            raise DockerConnectionError(f"Failed to connect to Docker daemon: {e}") from e
+            raise DockerConnectionError(
+                f"Failed to connect to Docker daemon: {e}"
+            ) from e
+
+    @classmethod
+    def get_shared(cls) -> "DockerClient":
+        """Get or create a shared DockerClient instance for connection pooling.
+
+        Returns:
+            Singleton DockerClient instance.
+        """
+        if cls._shared_instance is None:
+            cls._shared_instance = cls()
+        return cls._shared_instance
+
+    @classmethod
+    def reset_shared(cls) -> None:
+        """Reset the shared instance. Useful for testing."""
+        if cls._shared_instance is not None:
+            cls._shared_instance.close()
+            cls._shared_instance = None
 
     def ping(self) -> bool:
         """Check if Docker daemon is accessible.
@@ -43,10 +65,10 @@ class DockerClient:
 
     def list_containers(self, filters: dict[str, Any] | None = None) -> list[Container]:
         """List containers with optional filters.
-        
+
         Args:
             filters: Docker API filters (e.g., {"label": "com.docker.compose.project=myproject"})
-            
+
         Returns:
             List of Container objects
         """
@@ -55,13 +77,12 @@ class DockerClient:
         except APIError as e:
             raise DokmanError(f"Failed to list containers: {e}") from e
 
-
     def get_container(self, container_id: str) -> Container | None:
         """Get a container by ID or name.
-        
+
         Args:
             container_id: Container ID or name
-            
+
         Returns:
             Container object or None if not found
         """
@@ -74,13 +95,13 @@ class DockerClient:
 
     def inspect_container(self, container_id: str) -> dict[str, Any]:
         """Get detailed information about a container.
-        
+
         Args:
             container_id: Container ID or name
-            
+
         Returns:
             Dictionary with container inspection data
-            
+
         Raises:
             DockmanError: If container not found or inspection fails
         """
@@ -90,7 +111,9 @@ class DockerClient:
         except NotFound as e:
             raise DokmanError(f"Container '{container_id}' not found") from e
         except APIError as e:
-            raise DokmanError(f"Failed to inspect container '{container_id}': {e}") from e
+            raise DokmanError(
+                f"Failed to inspect container '{container_id}': {e}"
+            ) from e
 
     def get_container_stats(
         self, container_id: str, stream: bool = True
@@ -122,15 +145,16 @@ class DockerClient:
         except NotFound as e:
             raise DokmanError(f"Container '{container_id}' not found") from e
         except APIError as e:
-            raise DokmanError(f"Failed to get stats for container '{container_id}': {e}") from e
-
+            raise DokmanError(
+                f"Failed to get stats for container '{container_id}': {e}"
+            ) from e
 
     def list_images(self, filters: dict[str, Any] | None = None) -> list[Image]:
         """List images with optional filters.
-        
+
         Args:
             filters: Docker API filters
-            
+
         Returns:
             List of Image objects
         """
@@ -141,10 +165,10 @@ class DockerClient:
 
     def list_volumes(self, filters: dict[str, Any] | None = None) -> list[Volume]:
         """List volumes with optional filters.
-        
+
         Args:
             filters: Docker API filters
-            
+
         Returns:
             List of Volume objects
         """
@@ -156,10 +180,10 @@ class DockerClient:
 
     def list_networks(self, filters: dict[str, Any] | None = None) -> list[Network]:
         """List networks with optional filters.
-        
+
         Args:
             filters: Docker API filters
-            
+
         Returns:
             List of Network objects
         """
@@ -170,10 +194,10 @@ class DockerClient:
 
     def events(self, filters: dict[str, Any] | None = None) -> Iterator[dict[str, Any]]:
         """Stream Docker events.
-        
+
         Args:
             filters: Docker API filters (e.g., {"type": "container", "event": "start"})
-            
+
         Yields:
             Dictionary with event data
         """

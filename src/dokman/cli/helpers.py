@@ -29,11 +29,9 @@ if TYPE_CHECKING:
     from dokman.models.project import Project
     from dokman.services.config_manager import ConfigManager
 
-# Console for output
 console = Console()
 formatter = OutputFormatter(console)
 
-# Exit codes
 EXIT_SUCCESS = 0
 EXIT_GENERAL_ERROR = 1
 EXIT_PROJECT_NOT_FOUND = 2
@@ -52,33 +50,40 @@ class OutputFormat(str, Enum):
 
 
 def get_project_manager() -> ProjectManager:
-    """Create and return a ProjectManager instance."""
+    """Create and return a ProjectManager instance with pooled clients."""
     registry = ProjectRegistry()
-    docker = DockerClient()
-    compose = ComposeClient()
+    docker = DockerClient.get_shared()
+    compose = ComposeClient.get_shared()
     return ProjectManager(registry, docker, compose)
 
 
 def get_service_manager() -> ServiceManager:
-    """Create and return a ServiceManager instance."""
-    docker = DockerClient()
-    compose = ComposeClient()
+    """Create and return a ServiceManager instance with pooled clients."""
+    docker = DockerClient.get_shared()
+    compose = ComposeClient.get_shared()
     return ServiceManager(docker, compose)
 
 
 def get_resource_manager() -> ResourceManager:
-    """Create and return a ResourceManager instance."""
-    docker = DockerClient()
-    compose = ComposeClient()
+    """Create and return a ResourceManager instance with pooled clients."""
+    docker = DockerClient.get_shared()
+    compose = ComposeClient.get_shared()
     return ResourceManager(docker, compose)
 
 
 def get_config_manager() -> "ConfigManager":
-    """Create and return a ConfigManager instance."""
+    """Create and return a ConfigManager instance with pooled clients."""
     from dokman.services.config_manager import ConfigManager
-    docker = DockerClient()
-    compose = ComposeClient()
+
+    docker = DockerClient.get_shared()
+    compose = ComposeClient.get_shared()
     return ConfigManager(docker, compose)
+
+
+def close_shared_clients() -> None:
+    """Close shared Docker client connections. Call on app exit."""
+    DockerClient.reset_shared()
+    ComposeClient.reset_shared()
 
 
 def resolve_project(
@@ -87,18 +92,18 @@ def resolve_project(
     auto_detect_message: bool = True,
 ) -> "Project":
     """Resolve a project by name or auto-detect from current directory.
-    
+
     This helper reduces code duplication across commands that need to
     resolve a project from either an explicit name or the current directory.
-    
+
     Args:
         pm: ProjectManager instance
         project_name: Explicit project name, or None to auto-detect
         auto_detect_message: If True, print a message when auto-detecting
-        
+
     Returns:
         The resolved Project
-        
+
     Raises:
         ProjectNotFoundError: If project name given but not found
         typer.Exit: If no project specified and none found in current directory
@@ -108,15 +113,17 @@ def resolve_project(
         if proj is None:
             raise ProjectNotFoundError(project_name)
         return proj
-    
+
     # Auto-detect from current directory
     proj = pm.get_project_by_path(Path.cwd())
     if proj:
         if auto_detect_message:
             console.print(f"[dim]Auto-detected project: [cyan]{proj.name}[/cyan][/dim]")
         return proj
-    
-    console.print("[red]Error:[/red] No project specified and none found in current directory.")
+
+    console.print(
+        "[red]Error:[/red] No project specified and none found in current directory."
+    )
     raise typer.Exit(EXIT_NO_PROJECT_DETECTED)
 
 
@@ -142,7 +149,9 @@ def handle_error(e: Exception) -> None:
         console.print()
         console.print("[yellow]Tip:[/yellow] To clean up orphan containers:")
         for orphan in e.orphans:
-            console.print(f"  - Run 'docker stop {orphan.container_name}' and 'docker rm {orphan.container_name}'")
+            console.print(
+                f"  - Run 'docker stop {orphan.container_name}' and 'docker rm {orphan.container_name}'"
+            )
         raise typer.Exit(EXIT_GENERAL_ERROR)
     elif isinstance(e, StaleRegistryEntryError):
         console.print(f"[yellow]Warning:[/yellow] {e}")
