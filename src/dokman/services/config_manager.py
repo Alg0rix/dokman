@@ -8,7 +8,7 @@ from dokman.models.project import Project
 
 class ConfigManager:
     """Handles configuration comparison and drift detection.
-    
+
     Provides methods to compare Docker Compose configuration with
     the actual running container state.
     """
@@ -19,7 +19,7 @@ class ConfigManager:
         compose: ComposeClient,
     ) -> None:
         """Initialize ConfigManager.
-        
+
         Args:
             docker: Docker client for container operations
             compose: Compose client for compose operations
@@ -29,51 +29,51 @@ class ConfigManager:
 
     def diff_project(self, project: Project) -> ConfigDiff:
         """Compare compose config with running container state.
-        
+
         Analyzes differences between the docker-compose.yml configuration
         and the actual running containers.
-        
+
         Args:
             project: Project to compare
-            
+
         Returns:
             ConfigDiff with detected differences
         """
         # Get expected configuration from compose file
         expected = self._get_expected_config(project)
-        
+
         # Get actual configuration from running containers
         actual = self._get_actual_config(project)
-        
+
         service_diffs: list[ServiceDiff] = []
         missing_services: list[str] = []
         extra_services: list[str] = []
         has_changes = False
-        
+
         expected_names = set(expected.keys())
         actual_names = set(actual.keys())
-        
+
         # Find missing services (in config but not running)
         for name in expected_names - actual_names:
             missing_services.append(name)
             has_changes = True
-        
+
         # Find extra services (running but not in config)
         for name in actual_names - expected_names:
             extra_services.append(name)
             has_changes = True
-        
+
         # Compare common services
         for name in expected_names & actual_names:
             exp = expected[name]
             act = actual[name]
-            
+
             diff = self._compare_service(name, exp, act)
             service_diffs.append(diff)
-            
+
             if diff.status != "unchanged":
                 has_changes = True
-        
+
         return ConfigDiff(
             project_name=project.name,
             has_changes=has_changes,
@@ -166,7 +166,7 @@ class ConfigManager:
             limits_config = {
                 "memory": limits.get("memory_bytes"),
                 "memory_swap": None,
-                "cpu_period": limits.get("cpus") and str(limits["cpus"]),
+                "cpu_period": str(limits["cpus"]) if limits.get("cpus") else None,
                 "cpu_quota": None,
                 "cpu_shares": None,
             }
@@ -212,7 +212,7 @@ class ConfigManager:
 
             config = attrs.get("Config", {})
             host_config = attrs.get("HostConfig", {})
-            mounts = host_config.get("Mounts", [])
+            mounts = attrs.get("Mounts", [])
 
             # Get image
             image = config.get("Image", "")
@@ -234,7 +234,9 @@ class ConfigManager:
                     for binding in bindings:
                         host_port = binding.get("HostPort", "")
                         # Format: host_port:container_port
-                        port_str = container_port.replace("/tcp", "").replace("/udp", "")
+                        port_str = container_port.replace("/tcp", "").replace(
+                            "/udp", ""
+                        )
                         ports.append(f"{host_port}:{port_str}")
 
             # Get volumes from mounts
@@ -257,7 +259,8 @@ class ConfigManager:
             container_labels: dict[str, str] = config.get("Labels", {}) or {}
             # Filter out Docker Compose internal labels
             labels_diff: dict[str, str] = {
-                k: v for k, v in container_labels.items()
+                k: v
+                for k, v in container_labels.items()
                 if not k.startswith("com.docker.compose")
                 and not k.startswith("org.docker.compose")
             }
@@ -266,9 +269,15 @@ class ConfigManager:
             limits_config = {
                 "memory": self._format_memory_limit(host_config.get("Memory")),
                 "memory_swap": self._format_memory_limit(host_config.get("MemorySwap")),
-                "cpu_period": str(host_config.get("CpuPeriod", "")) or None,
-                "cpu_quota": str(host_config.get("CpuQuota", "")) or None,
-                "cpu_shares": str(host_config.get("CpuShares", "")) or None,
+                "cpu_period": str(host_config["CpuPeriod"])
+                if host_config.get("CpuPeriod")
+                else None,
+                "cpu_quota": str(host_config["CpuQuota"])
+                if host_config.get("CpuQuota")
+                else None,
+                "cpu_shares": str(host_config["CpuShares"])
+                if host_config.get("CpuShares")
+                else None,
             }
 
             result[service_name] = {
@@ -374,18 +383,35 @@ class ConfigManager:
         act_limits = actual.get("limits", {})
 
         limits_diffs = ResourceLimitsDiff(
-            memory=self._compare_limit(exp_limits.get("memory"), act_limits.get("memory")),
-            memory_swap=self._compare_limit(exp_limits.get("memory_swap"), act_limits.get("memory_swap")),
-            cpu_period=self._compare_limit(exp_limits.get("cpu_period"), act_limits.get("cpu_period")),
-            cpu_quota=self._compare_limit(exp_limits.get("cpu_quota"), act_limits.get("cpu_quota")),
-            cpu_shares=self._compare_limit(exp_limits.get("cpu_shares"), act_limits.get("cpu_shares")),
+            memory=self._compare_limit(
+                exp_limits.get("memory"), act_limits.get("memory")
+            ),
+            memory_swap=self._compare_limit(
+                exp_limits.get("memory_swap"), act_limits.get("memory_swap")
+            ),
+            cpu_period=self._compare_limit(
+                exp_limits.get("cpu_period"), act_limits.get("cpu_period")
+            ),
+            cpu_quota=self._compare_limit(
+                exp_limits.get("cpu_quota"), act_limits.get("cpu_quota")
+            ),
+            cpu_shares=self._compare_limit(
+                exp_limits.get("cpu_shares"), act_limits.get("cpu_shares")
+            ),
         )
 
         if limits_diffs.has_changes():
             limits_diff = limits_diffs
 
         # Determine status
-        if image_diff or env_diff or ports_diff or volumes_diff or labels_diff or limits_diff:
+        if (
+            image_diff
+            or env_diff
+            or ports_diff
+            or volumes_diff
+            or labels_diff
+            or limits_diff
+        ):
             status = "modified"
         else:
             status = "unchanged"
@@ -411,19 +437,19 @@ class ConfigManager:
 
     def _images_match(self, expected: str, actual: str) -> bool:
         """Check if two image references match.
-        
+
         Handles implicit :latest tags and registry prefixes.
-        
+
         Args:
             expected: Expected image reference
             actual: Actual image reference
-            
+
         Returns:
             True if images match
         """
         if expected == actual:
             return True
-        
+
         # Normalize by adding :latest if no tag
         def normalize(img: str) -> str:
             if not img:
@@ -431,5 +457,5 @@ class ConfigManager:
             if ":" not in img.split("/")[-1]:
                 return f"{img}:latest"
             return img
-        
+
         return normalize(expected) == normalize(actual)

@@ -53,7 +53,9 @@ def prune_registry(
 
         for reg_project, issues in stale:
             issue_str = ", ".join(
-                "missing compose file" if i == "missing_compose_file" else "has orphan containers"
+                "missing compose file"
+                if i == "missing_compose_file"
+                else "has orphan containers"
                 for i in issues
             )
             console.print(f"  [yellow]{reg_project.name}[/yellow]")
@@ -76,7 +78,9 @@ def prune_registry(
             formatter.print_json(result)
         else:
             if result["removed"]:
-                console.print(f"\n[green]✓[/green] Removed {len(result['removed'])} entry(ies):")
+                console.print(
+                    f"\n[green]✓[/green] Removed {len(result['removed'])} entry(ies):"
+                )
                 for name in result["removed"]:
                     console.print(f"  - {name}")
 
@@ -119,43 +123,55 @@ def doctor(
     try:
         docker = DockerClient()
         docker.ping()
-        checks.append({
-            "check": "Docker Daemon",
-            "status": "passed",
-            "message": "Docker daemon is accessible",
-        })
+        checks.append(
+            {
+                "check": "Docker Daemon",
+                "status": "passed",
+                "message": "Docker daemon is accessible",
+            }
+        )
     except DokmanError as e:
-        checks.append({
-            "check": "Docker Daemon",
-            "status": "failed",
-            "message": str(e),
-        })
-        issues.append({
-            "check": "Docker Daemon",
-            "status": "failed",
-            "message": str(e),
-        })
+        checks.append(
+            {
+                "check": "Docker Daemon",
+                "status": "failed",
+                "message": str(e),
+            }
+        )
+        issues.append(
+            {
+                "check": "Docker Daemon",
+                "status": "failed",
+                "message": str(e),
+            }
+        )
 
     # Check 2: Registry file
     try:
         registry = ProjectRegistry()
         projects = registry.load()
-        checks.append({
-            "check": "Registry File",
-            "status": "passed",
-            "message": f"Registry loaded ({len(projects)} projects)",
-        })
+        checks.append(
+            {
+                "check": "Registry File",
+                "status": "passed",
+                "message": f"Registry loaded ({len(projects)} projects)",
+            }
+        )
     except DokmanError as e:
-        checks.append({
-            "check": "Registry File",
-            "status": "failed",
-            "message": str(e),
-        })
-        issues.append({
-            "check": "Registry File",
-            "status": "failed",
-            "message": str(e),
-        })
+        checks.append(
+            {
+                "check": "Registry File",
+                "status": "failed",
+                "message": str(e),
+            }
+        )
+        issues.append(
+            {
+                "check": "Registry File",
+                "status": "failed",
+                "message": str(e),
+            }
+        )
 
     # Check 3: Stale registry entries
     try:
@@ -164,32 +180,40 @@ def doctor(
 
         if stale:
             stale_projects = [p.name for p, _ in stale]
-            checks.append({
-                "check": "Stale Registry Entries",
-                "status": "warning",
-                "message": f"{len(stale)} stale entry(ies): {', '.join(stale_projects)}",
-            })
+            checks.append(
+                {
+                    "check": "Stale Registry Entries",
+                    "status": "warning",
+                    "message": f"{len(stale)} stale entry(ies): {', '.join(stale_projects)}",
+                }
+            )
             for reg_project, issue_types in stale:
                 for issue_type in issue_types:
-                    issues.append({
-                        "check": f"Stale Entry: {reg_project.name}",
-                        "status": "warning",
-                        "message": issue_type.replace("_", " "),
-                        "project": reg_project.name,
-                        "compose_file": str(reg_project.compose_file),
-                    })
+                    issues.append(
+                        {
+                            "check": f"Stale Entry: {reg_project.name}",
+                            "status": "warning",
+                            "message": issue_type.replace("_", " "),
+                            "project": reg_project.name,
+                            "compose_file": str(reg_project.compose_file),
+                        }
+                    )
         else:
-            checks.append({
-                "check": "Stale Registry Entries",
-                "status": "passed",
-                "message": "No stale entries found",
-            })
+            checks.append(
+                {
+                    "check": "Stale Registry Entries",
+                    "status": "passed",
+                    "message": "No stale entries found",
+                }
+            )
     except DokmanError as e:
-        checks.append({
-            "check": "Stale Registry Entries",
-            "status": "error",
-            "message": str(e),
-        })
+        checks.append(
+            {
+                "check": "Stale Registry Entries",
+                "status": "error",
+                "message": str(e),
+            }
+        )
 
     # Check 4: Orphan containers
     try:
@@ -198,32 +222,40 @@ def doctor(
 
         if orphans:
             project_names = set(o["project_name"] for o in orphans)
-            checks.append({
-                "check": "Orphan Containers",
-                "status": "warning",
-                "message": f"{len(orphans)} orphan container(s) for projects: {', '.join(project_names)}",
-            })
-            for orphan in orphans:
-                issues.append({
-                    "check": f"Orphan Container: {orphan['container_name']}",
+            checks.append(
+                {
+                    "check": "Orphan Containers",
                     "status": "warning",
-                    "message": f"Project: {orphan['project_name']}, Service: {orphan['service_name']}",
-                    "container_id": orphan["container_id"],
-                    "project": orphan["project_name"],
-                    "service": orphan["service_name"],
-                })
+                    "message": f"{len(orphans)} orphan container(s) for projects: {', '.join(project_names)}",
+                }
+            )
+            for orphan in orphans:
+                issues.append(
+                    {
+                        "check": f"Orphan Container: {orphan['container_name']}",
+                        "status": "warning",
+                        "message": f"Project: {orphan['project_name']}, Service: {orphan['service_name']}",
+                        "container_id": orphan["container_id"],
+                        "project": orphan["project_name"],
+                        "service": orphan["service_name"],
+                    }
+                )
         else:
-            checks.append({
-                "check": "Orphan Containers",
-                "status": "passed",
-                "message": "No orphan containers found",
-            })
+            checks.append(
+                {
+                    "check": "Orphan Containers",
+                    "status": "passed",
+                    "message": "No orphan containers found",
+                }
+            )
     except DokmanError as e:
-        checks.append({
-            "check": "Orphan Containers",
-            "status": "error",
-            "message": str(e),
-        })
+        checks.append(
+            {
+                "check": "Orphan Containers",
+                "status": "error",
+                "message": str(e),
+            }
+        )
 
     # Check 5: Orphan volumes (volumes not used by any registered project)
     try:
@@ -245,8 +277,7 @@ def doctor(
                 continue
 
             attrs = getattr(container, "attrs", {}) or {}
-            host_config = attrs.get("HostConfig", {}) or {}
-            mounts = host_config.get("Mounts", [])
+            mounts = attrs.get("Mounts", [])
 
             for mount in mounts:
                 if mount.get("Type") == "volume":
@@ -259,46 +290,60 @@ def doctor(
 
         # Filter out common internal volumes
         internal_prefixes = ("dokman_", "dokman-")
-        orphan_volumes = {v for v in orphan_volumes if not v.startswith(internal_prefixes)}
+        orphan_volumes = {
+            v for v in orphan_volumes if not v.startswith(internal_prefixes)
+        }
 
         if orphan_volumes:
-            checks.append({
-                "check": "Orphan Volumes",
-                "status": "warning",
-                "message": f"{len(orphan_volumes)} unused volume(s): {', '.join(list(orphan_volumes)[:5])}",
-            })
-            for vol_name in orphan_volumes:
-                issues.append({
-                    "check": f"Orphan Volume: {vol_name}",
+            checks.append(
+                {
+                    "check": "Orphan Volumes",
                     "status": "warning",
-                    "message": "Volume not used by any registered project",
-                    "volume": vol_name,
-                })
+                    "message": f"{len(orphan_volumes)} unused volume(s): {', '.join(list(orphan_volumes)[:5])}",
+                }
+            )
+            for vol_name in orphan_volumes:
+                issues.append(
+                    {
+                        "check": f"Orphan Volume: {vol_name}",
+                        "status": "warning",
+                        "message": "Volume not used by any registered project",
+                        "volume": vol_name,
+                    }
+                )
         else:
-            checks.append({
-                "check": "Orphan Volumes",
-                "status": "passed",
-                "message": "No orphan volumes found",
-            })
+            checks.append(
+                {
+                    "check": "Orphan Volumes",
+                    "status": "passed",
+                    "message": "No orphan volumes found",
+                }
+            )
     except DokmanError as e:
-        checks.append({
-            "check": "Orphan Volumes",
-            "status": "error",
-            "message": str(e),
-        })
+        checks.append(
+            {
+                "check": "Orphan Volumes",
+                "status": "error",
+                "message": str(e),
+            }
+        )
 
     # Output results
     if output_format == OutputFormat.json:
-        formatter.print_json({
-            "checks": checks,
-            "issues": issues,
-            "summary": {
-                "total_checks": len(checks),
-                "passed": sum(1 for c in checks if c["status"] == "passed"),
-                "warnings": sum(1 for c in checks if c["status"] == "warning"),
-                "failed": sum(1 for c in checks if c["status"] in ("failed", "error")),
+        formatter.print_json(
+            {
+                "checks": checks,
+                "issues": issues,
+                "summary": {
+                    "total_checks": len(checks),
+                    "passed": sum(1 for c in checks if c["status"] == "passed"),
+                    "warnings": sum(1 for c in checks if c["status"] == "warning"),
+                    "failed": sum(
+                        1 for c in checks if c["status"] in ("failed", "error")
+                    ),
+                },
             }
-        })
+        )
     else:
         console.print("\n[bold cyan]Dokman Doctor[/bold cyan]\n")
 
@@ -307,7 +352,9 @@ def doctor(
         warnings = sum(1 for c in checks if c["status"] == "warning")
         failed = sum(1 for c in checks if c["status"] in ("failed", "error"))
 
-        console.print(f"Checks: [green]{passed}[/green] passed, [yellow]{warnings}[/yellow] warnings, [red]{failed}[/red] failed\n")
+        console.print(
+            f"Checks: [green]{passed}[/green] passed, [yellow]{warnings}[/yellow] warnings, [red]{failed}[/red] failed\n"
+        )
 
         # Detailed checks
         console.print("[bold]System Checks[/bold]\n")
@@ -348,26 +395,42 @@ def doctor(
                 stale_to_fix = [i for i in issues if "Stale Entry" in i["check"]]
                 if stale_to_fix:
                     result = pm.prune_stale_entries(force=True)
-                    console.print(f"  [green]✓[/green] Removed {len(result['removed'])} stale entry(ies)")
+                    console.print(
+                        f"  [green]✓[/green] Removed {len(result['removed'])} stale entry(ies)"
+                    )
                     issues = [i for i in issues if "Stale Entry" not in i["check"]]
 
                 # Re-check if issues remain
                 remaining = sum(1 for i in issues if "Orphan" in i["check"])
                 if remaining:
-                    console.print(f"\n  [yellow]Note:[/yellow] {remaining} issue(s) require manual intervention")
-                    console.print("  Run 'dokman prune-registry' to clean stale entries")
-                    console.print("  Run 'docker compose down --remove-orphans' in project directories for orphan containers")
+                    console.print(
+                        f"\n  [yellow]Note:[/yellow] {remaining} issue(s) require manual intervention"
+                    )
+                    console.print(
+                        "  Run 'dokman prune-registry' to clean stale entries"
+                    )
+                    console.print(
+                        "  Run 'docker compose down --remove-orphans' in project directories for orphan containers"
+                    )
 
         # Recommendations
         if issues:
             console.print("\n[bold]Recommendations[/bold]\n")
             has_stale = any("Stale" in i["check"] for i in issues)
-            has_orphan_containers = any("Orphan Container" in i["check"] for i in issues)
+            has_orphan_containers = any(
+                "Orphan Container" in i["check"] for i in issues
+            )
             has_orphan_volumes = any("Orphan Volume" in i["check"] for i in issues)
 
             if has_stale:
-                console.print("  Run [cyan]`dokman prune-registry`[/cyan] to clean stale entries")
+                console.print(
+                    "  Run [cyan]`dokman prune-registry`[/cyan] to clean stale entries"
+                )
             if has_orphan_containers:
-                console.print("  Run [cyan]`dokman down --remove-orphans`[/cyan] in project directories")
+                console.print(
+                    "  Run [cyan]`dokman down --remove-orphans`[/cyan] in project directories"
+                )
             if has_orphan_volumes:
-                console.print("  Run [cyan]`docker volume prune`[/cyan] to remove unused volumes (careful!)")
+                console.print(
+                    "  Run [cyan]`docker volume prune`[/cyan] to remove unused volumes (careful!)"
+                )

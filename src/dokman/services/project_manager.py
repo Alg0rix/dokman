@@ -178,7 +178,7 @@ class ProjectManager:
                 stale.append((reg_project, issues))
                 continue
 
-            # Check for orphaned containers (running containers for unregistered project)
+            # Check for orphaned containers (running containers for registered project)
             try:
                 containers = self._docker.list_containers(
                     filters={"label": f"com.docker.compose.project={reg_project.name}"}

@@ -1,6 +1,5 @@
 """Custom exceptions for Dokman."""
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
@@ -58,7 +57,6 @@ class RegistryError(DokmanError):
     pass
 
 
-@dataclass
 class OrphanContainerInfo(NamedTuple):
     """Information about an orphan container."""
 
