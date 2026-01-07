@@ -90,15 +90,15 @@ class ProjectRegistry:
         Raises:
             RegistryError: If the file cannot be written.
         """
-        try:
-            self._config_path.parent.mkdir(parents=True, exist_ok=True)
-
-            data = {name: project.to_dict() for name, project in projects.items()}
-
-            with open(self._config_path, "w") as f:
-                json.dump(data, f, indent=2)
-        except (OSError, IOError) as e:
-            raise RegistryError(f"Failed to write registry file: {e}")
+        with self._lock:
+            try:
+                self._config_path.parent.mkdir(parents=True, exist_ok=True)
+                data = {name: project.to_dict() for name, project in projects.items()}
+                with open(self._config_path, "w") as f:
+                    json.dump(data, f, indent=2)
+                self._cache = projects.copy()
+            except (OSError, IOError) as e:
+                raise RegistryError(f"Failed to write registry file: {e}")
 
     def add(self, project: RegisteredProject) -> None:
         """Add a project to the registry.

@@ -63,12 +63,13 @@ class ProjectManager:
                     for reg in registered
                 }
                 for future in as_completed(future_to_project):
+                    reg = future_to_project[future]
                     try:
                         project = future.result()
                         if project:
                             projects.append(project)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        self._logger.debug("Failed to load project %s: %s", reg.name, e)
 
         if include_unregistered:
             discovered = self.discover_projects()

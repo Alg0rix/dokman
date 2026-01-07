@@ -121,7 +121,7 @@ def doctor(
 
     # Check 1: Docker daemon connectivity
     try:
-        docker = DockerClient()
+        docker = DockerClient.get_shared()
         docker.ping()
         checks.append(
             {
@@ -259,7 +259,7 @@ def doctor(
 
     # Check 5: Orphan volumes (volumes not used by any registered project)
     try:
-        docker = DockerClient()
+        docker = DockerClient.get_shared()
         all_containers = docker.list_containers(
             filters={"label": "com.docker.compose.project"}
         )
