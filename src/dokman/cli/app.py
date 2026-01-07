@@ -10,6 +10,7 @@ Command modules:
 - resources: Resource management (images, volumes, networks, stats)
 - config: Configuration (pull, build, config, env)
 - backup: Backup/restore (backup, restore, backup-list, diff)
+- maintenance: System maintenance (prune-registry, doctor)
 """
 
 import typer
@@ -23,6 +24,7 @@ from dokman.cli.commands import (
     config,
     debug,
     lifecycle,
+    maintenance,
     project,
     resources,
 )
@@ -127,6 +129,14 @@ app.command("backup")(backup.backup_project)
 app.command("restore")(backup.restore_project)
 app.command("backup-list")(backup.list_backups)
 app.command("diff")(backup.diff_project)
+
+
+# -----------------------------------------------------------------------------
+# Register Maintenance Commands
+# -----------------------------------------------------------------------------
+
+app.command("prune-registry")(maintenance.prune_registry)
+app.command("doctor")(maintenance.doctor)
 
 
 if __name__ == "__main__":

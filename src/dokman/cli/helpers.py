@@ -14,9 +14,11 @@ from dokman.exceptions import (
     ComposeFileNotFoundError,
     DockerConnectionError,
     DokmanError,
+    OrphanContainersError,
     ProjectNotFoundError,
     ServiceNotFoundError,
     ServiceNotRunningError,
+    StaleRegistryEntryError,
 )
 from dokman.services.project_manager import ProjectManager
 from dokman.services.resource_manager import ResourceManager
@@ -135,6 +137,16 @@ def handle_error(e: Exception) -> None:
     elif isinstance(e, ComposeFileNotFoundError):
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(EXIT_COMPOSE_FILE_ERROR)
+    elif isinstance(e, OrphanContainersError):
+        console.print(f"[red]Error:[/red] {e}")
+        console.print()
+        console.print("[yellow]Tip:[/yellow] To clean up orphan containers:")
+        for orphan in e.orphans:
+            console.print(f"  - Run 'docker stop {orphan.container_name}' and 'docker rm {orphan.container_name}'")
+        raise typer.Exit(EXIT_GENERAL_ERROR)
+    elif isinstance(e, StaleRegistryEntryError):
+        console.print(f"[yellow]Warning:[/yellow] {e}")
+        raise typer.Exit(EXIT_GENERAL_ERROR)
     elif isinstance(e, DokmanError):
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(EXIT_GENERAL_ERROR)

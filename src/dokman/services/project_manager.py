@@ -92,14 +92,120 @@ class ProjectManager:
 
     def get_registered_names(self) -> set[str]:
         """Get the names of all registered projects.
-        
+
         This is useful for determining which projects from a list
         are registered vs discovered.
-        
+
         Returns:
             Set of registered project names
         """
         return {p.name for p in self._registry.list_all()}
+
+    def get_stale_projects(self) -> list[tuple[RegisteredProject, list[str]]]:
+        """Find registered projects with missing compose files or orphaned containers.
+
+        Returns:
+            List of tuples containing (registered_project, list_of_issues)
+            where issues can be "missing_compose_file" or "has_orphans"
+        """
+        stale: list[tuple[RegisteredProject, list[str]]] = []
+        registered = self._registry.list_all()
+
+        for reg_project in registered:
+            issues: list[str] = []
+
+            # Check if compose file exists
+            if not reg_project.compose_file.exists():
+                issues.append("missing_compose_file")
+                stale.append((reg_project, issues))
+                continue
+
+            # Check for orphaned containers (running containers for unregistered project)
+            try:
+                containers = self._docker.list_containers(
+                    filters={"label": f"com.docker.compose.project={reg_project.name}"}
+                )
+                if containers:
+                    issues.append("has_orphans")
+            except DokmanError:
+                # Docker error - skip this check
+                pass
+
+            if issues:
+                stale.append((reg_project, issues))
+
+        return stale
+
+    def find_orphan_containers(self) -> list[dict]:
+        """Find containers running for projects that are not registered.
+
+        Returns:
+            List of dictionaries containing orphan container information
+        """
+        # Get all running compose containers
+        containers = self._docker.list_containers(
+            filters={"label": "com.docker.compose.project"}
+        )
+
+        # Get registered project names
+        registered_names = self.get_registered_names()
+
+        orphans: list[dict] = []
+        for container in containers:
+            labels = container.labels or {}
+            project_name = labels.get("com.docker.compose.project", "")
+
+            # Skip if project is registered
+            if project_name in registered_names:
+                continue
+
+            # Skip compose internals
+            if project_name.startswith("dokman-"):
+                continue
+
+            service_name = labels.get("com.docker.compose.service", container.name)
+
+            # Get container attrs for more info
+            attrs = getattr(container, "attrs", {}) or {}
+            created = attrs.get("Created", "")[:10] if attrs.get("Created") else None
+
+            orphans.append({
+                "container_id": container.id[:12] if container.id else "",
+                "container_name": container.name,
+                "project_name": project_name,
+                "service_name": service_name,
+                "status": container.status,
+                "created_at": created,
+            })
+
+        return orphans
+
+    def prune_stale_entries(self, force: bool = False) -> dict:
+        """Remove stale registry entries.
+
+        Args:
+            force: If True, remove entries without confirmation
+
+        Returns:
+            Dictionary with 'removed' and 'skipped' lists
+        """
+        stale = self.get_stale_projects()
+        removed: list[str] = []
+        skipped: list[str] = []
+
+        for reg_project, issues in stale:
+            issue_descriptions = ", ".join(
+                "missing compose file" if i == "missing_compose_file" else "has orphan containers"
+                for i in issues
+            )
+
+            if force:
+                self._registry.remove(reg_project.name)
+                removed.append(f"{reg_project.name} ({issue_descriptions})")
+            else:
+                skipped.append(f"{reg_project.name} ({issue_descriptions})")
+
+        return {"removed": removed, "skipped": skipped}
 
     def get_project_by_path(self, path: Path) -> Project | None:
         """Get a project by its directory path.

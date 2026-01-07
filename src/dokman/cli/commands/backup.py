@@ -194,7 +194,7 @@ def diff_project(
     ] = None,
     verbose: Annotated[
         bool,
-        typer.Option("--verbose", "-v", help="Show all differences including environment variables"),
+        typer.Option("--verbose", "-v", help="Show all differences including environment variables, volumes, labels, and limits"),
     ] = False,
     output_format: Annotated[
         OutputFormat,
@@ -204,10 +204,11 @@ def diff_project(
     """Compare compose configuration with running container state.
 
     Detects drift between the docker-compose.yml file and the actual
-    running containers. Shows differences in images, ports, and environment.
+    running containers. Shows differences in images, ports, environment,
+    volumes, labels, and resource limits.
     """
     from dokman.cli.helpers import get_config_manager
-    
+
     try:
         pm = get_project_manager()
         cm = get_config_manager()
@@ -220,44 +221,76 @@ def diff_project(
             formatter.print_json(diff.to_dict())
         else:
             console.print(f"\n[bold cyan]Configuration Diff: {proj.name}[/bold cyan]\n")
-            
+
             if not diff.has_changes:
                 console.print("[green]✓[/green] No drift detected - configuration matches running state")
                 raise typer.Exit(EXIT_SUCCESS)
-            
+
             # Missing services (in config but not running)
             if diff.missing_services:
                 console.print("[yellow]Services not running:[/yellow]")
                 for svc in diff.missing_services:
                     console.print(f"  [red]- {svc}[/red]")
                 console.print()
-            
+
             # Extra services (running but not in config)
             if diff.extra_services:
                 console.print("[yellow]Extra services (not in config):[/yellow]")
                 for svc in diff.extra_services:
                     console.print(f"  [yellow]+ {svc}[/yellow]")
                 console.print()
-            
+
             # Modified services
             modified = [s for s in diff.services if s.status == "modified"]
             if modified:
                 console.print("[yellow]Modified services:[/yellow]")
                 for svc in modified:
                     console.print(f"\n  [cyan]{svc.service_name}[/cyan]:")
-                    
+
                     if svc.image_diff:
                         expected, actual = svc.image_diff
                         console.print("    Image:")
                         console.print(f"      [red]- expected: {expected}[/red]")
                         console.print(f"      [green]+ actual:   {actual}[/green]")
-                    
+
                     if svc.ports_diff:
                         expected, actual = svc.ports_diff
                         console.print("    Ports:")
                         console.print(f"      [red]- expected: {', '.join(expected) or '(none)'}[/red]")
                         console.print(f"      [green]+ actual:   {', '.join(actual) or '(none)'}[/green]")
-                    
+
+                    if svc.volumes_diff:
+                        expected, actual = svc.volumes_diff
+                        console.print("    Volumes:")
+                        console.print(f"      [red]- expected: {', '.join(expected) or '(none)'}[/red]")
+                        console.print(f"      [green]+ actual:   {', '.join(actual) or '(none)'}[/green]")
+
+                    if svc.limits_diff and svc.limits_diff.has_changes():
+                        console.print("    Resource Limits:")
+                        limits = svc.limits_diff
+                        if limits.memory:
+                            console.print(f"      Memory: [red]- {limits.memory[0] or '(not set)'}[/red] [green]+ {limits.memory[1] or '(not set)'}[/green]")
+                        if limits.memory_swap:
+                            console.print(f"      Memory Swap: [red]- {limits.memory_swap[0] or '(not set)'}[/red] [green]+ {limits.memory_swap[1] or '(not set)'}[/green]")
+                        if limits.cpu_period:
+                            console.print(f"      CPU Period: [red]- {limits.cpu_period[0] or '(not set)'}[/red] [green]+ {limits.cpu_period[1] or '(not set)'}[/green]")
+                        if limits.cpu_quota:
+                            console.print(f"      CPU Quota: [red]- {limits.cpu_quota[0] or '(not set)'}[/red] [green]+ {limits.cpu_quota[1] or '(not set)'}[/green]")
+                        if limits.cpu_shares:
+                            console.print(f"      CPU Shares: [red]- {limits.cpu_shares[0] or '(not set)'}[/red] [green]+ {limits.cpu_shares[1] or '(not set)'}[/green]")
+
+                    if svc.labels_diff:
+                        if verbose:
+                            console.print("    Labels:")
+                            for key, (expected, actual) in svc.labels_diff.items():
+                                exp_val = expected if expected else "(not set)"
+                                act_val = actual if actual else "(not set)"
+                                console.print(f"      {key}:")
+                                console.print(f"        [red]- {exp_val}[/red]")
+                                console.print(f"        [green]+ {act_val}[/green]")
+                        else:
+                            console.print(f"    [dim]{len(svc.labels_diff)} label(s) differ (use -v to see)[/dim]")
+
                     if verbose and svc.env_diff:
                         console.print("    Environment:")
                         for key, (expected, actual) in svc.env_diff.items():
@@ -268,9 +301,9 @@ def diff_project(
                             console.print(f"        [green]+ {act_val}[/green]")
                     elif svc.env_diff and not verbose:
                         console.print(f"    [dim]{len(svc.env_diff)} environment variable(s) differ (use -v to see)[/dim]")
-                
+
                 console.print()
-            
+
             # Unchanged services count
             unchanged = [s for s in diff.services if s.status == "unchanged"]
             if unchanged:

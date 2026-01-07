@@ -89,7 +89,7 @@ wheels = [
 
 [[package]]
 name = "dokman"
-version = "0.3.0"
+version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "docker" },

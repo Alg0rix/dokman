@@ -29,6 +29,18 @@ class DockerClient:
         except DockerException as e:
             raise DockerConnectionError(f"Failed to connect to Docker daemon: {e}") from e
 
+    def ping(self) -> bool:
+        """Check if Docker daemon is accessible.
+
+        Returns:
+            True if Docker is accessible, False otherwise.
+        """
+        try:
+            self._client.ping()
+            return True
+        except DockerException:
+            return False
+
     def list_containers(self, filters: dict[str, Any] | None = None) -> list[Container]:
         """List containers with optional filters.
         
