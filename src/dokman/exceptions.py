@@ -1,6 +1,7 @@
 """Custom exceptions for Dokman."""
 
 from pathlib import Path
+from typing import NamedTuple
 
 
 class DokmanError(Exception):
@@ -54,3 +55,48 @@ class RegistryError(DokmanError):
     """Raised for project registry operations failures."""
 
     pass
+
+
+class OrphanContainerInfo(NamedTuple):
+    """Information about an orphan container."""
+
+    container_id: str
+    container_name: str
+    project_name: str
+    service_name: str
+    status: str
+    created_at: str | None = None
+
+
+class OrphanContainersError(DokmanError):
+    """Raised when orphan containers are detected from an unregistered project."""
+
+    def __init__(self, orphans: list[OrphanContainerInfo]):
+        self.orphans = orphans
+        project_names = set(o.project_name for o in orphans)
+        if len(project_names) == 1:
+            msg = (
+                f"Container(s) found for unregistered project '{list(project_names)[0]}'.\n"
+                f"  Run 'dokman down --remove-orphans' in the project directory to clean up,\n"
+                f"  or use 'dokman doctor' for system diagnostics."
+            )
+        else:
+            msg = (
+                f"Container(s) found for unregistered projects: {', '.join(project_names)}.\n"
+                f"  Run 'dokman down --remove-orphans' in each project directory to clean up,\n"
+                f"  or use 'dokman doctor' for system diagnostics."
+            )
+        super().__init__(msg)
+
+
+class StaleRegistryEntryError(DokmanError):
+    """Raised when a registered project's compose file has been deleted."""
+
+    def __init__(self, project_name: str, compose_file: Path):
+        self.project_name = project_name
+        self.compose_file = compose_file
+        super().__init__(
+            f"Project '{project_name}' is registered but compose file is missing: '{compose_file}'.\n"
+            f"  Run 'dokman prune-registry' to clean up stale entries,\n"
+            f"  or use 'dokman doctor' to find all stale entries."
+        )
